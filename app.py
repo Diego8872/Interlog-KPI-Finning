@@ -332,6 +332,8 @@ def chart_gauge(pct, title):
     return fig
 
 def chart_hbar(labels, values, kpi_pcts, colors=None):
+    if not labels or not values:
+        return go.Figure().update_layout(**CHART_LAYOUT, height=120)
     colors = colors or [COLORS['accent']] * len(labels)
     fig = go.Figure()
     for i, (lbl, val, pct, col) in enumerate(zip(labels, values, kpi_pcts, colors)):
