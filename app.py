@@ -1035,7 +1035,7 @@ elif st.session_state.step == 3:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── TABS ──
-    tab1, tab2, tab3, tab4 = st.tabs(["📦 FASA", "🏔️ FSM", "🚢 MARÍTIMOS", "📜 CERTIFICADOS MINEROS"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📦 FASA", "🏔️ FSM", "🚢 MARÍTIMOS", "📊 DETALLE POR VÍA", "📜 CERTIFICADOS MINEROS"])
 
     with tab1:
         render_kpi_section('FASA', lib_items, ofi_items, con_param=True)
@@ -1053,8 +1053,8 @@ elif st.session_state.step == 3:
         c1,c2,c3,c4 = st.columns(4)
         c1.markdown(metric_html(str(len(mar_lib)), "Liberaciones", "Vía Marítima"), unsafe_allow_html=True)
         c2.markdown(metric_html(str(len(mar_ofi)), "Oficializaciones", "Vía Marítima"), unsafe_allow_html=True)
-        c3.plotly_chart(chart_gauge(pct_mar_lib, "KPI IN Lib"), use_container_width=True)
-        c4.plotly_chart(chart_gauge(pct_mar_ofi, "KPI IN Ofi"), use_container_width=True)
+        c3.plotly_chart(chart_gauge(pct_mar_lib, "KPI IN Lib"), use_container_width=True, key="gauge_mar_lib")
+        c4.plotly_chart(chart_gauge(pct_mar_ofi, "KPI IN Ofi"), use_container_width=True, key="gauge_mar_ofi")
 
         if mar_lib:
             by_canal = Counter(i['canal'] for i in mar_lib)
@@ -1063,14 +1063,129 @@ elif st.session_state.step == 3:
                 hole=0.55, marker_colors=[COLORS.get(k.lower(), COLORS['gray']) for k in by_canal.keys()]
             ))
             fig.update_layout(**CHART_LAYOUT, height=280, title="Distribución de canales marítimos")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="pie_mar")
 
     with tab4:
+        st.markdown('<div class="section-header">DETALLE DE LIBERACIONES · POR SOCIEDAD, VÍA Y CANAL</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="alert-info">
+        Desglose completo de liberaciones: cada combinación de Razón Social × Vía × Canal con su KPI, 
+        cantidad de operaciones y distribución IN/OUT.
+        </div><br>
+        """, unsafe_allow_html=True)
+
+        vias_orden = ['AVION', 'MARITIMO', 'CAMION']
+        canales_orden = ['VERDE', 'NARANJA', 'ROJO']
+        razones = ['FASA', 'FSM']
+
+        for razon in razones:
+            r_items = [i for i in lib_items if i['nombre'] == razon]
+            if not r_items: continue
+
+            accent_color = '#00C9A7' if razon == 'FASA' else '#FF8C42'
+            st.markdown(f"""
+            <div style="background:#132236; border-left:4px solid {accent_color};
+                 padding:0.6rem 1rem; margin:1.2rem 0 0.6rem; border-radius:0 6px 6px 0;">
+                <span style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem;
+                font-weight:800; color:{accent_color}; letter-spacing:2px;">{razon}</span>
+                <span style="font-size:0.8rem; color:#6B8099; margin-left:1rem;">
+                {len(r_items)} liberaciones totales</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            for via in vias_orden:
+                via_items = [i for i in r_items if i['via'] == via]
+                if not via_items: continue
+
+                pct_via, in_via, out_via = calcular_kpi(via_items, True)
+                by_canal = Counter(i['canal'] for i in via_items)
+
+                kpi_color = '#00C9A7' if pct_via >= 95 else ('#FF8C42' if pct_via >= 80 else '#FF3D5E')
+
+                st.markdown(f"""
+                <div style="background:#1A2E48; border-radius:6px; padding:0.5rem 1rem;
+                     margin:0.4rem 0; display:flex; align-items:center; gap:1rem;">
+                    <span style="font-family:'Barlow Condensed',sans-serif; font-weight:700;
+                    color:#F0F4F8; font-size:1rem; min-width:100px;">✈️ {via}</span>
+                    <span style="color:{kpi_color}; font-weight:800; font-size:1.1rem;
+                    font-family:'Barlow Condensed',sans-serif;">{pct_via:.1f}% IN</span>
+                    <span style="color:#6B8099; font-size:0.8rem;">|</span>
+                    <span style="color:#9AB0C4; font-size:0.85rem;">{len(via_items)} ops
+                    · {in_via} IN · {out_via} OUT</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Fila de cards por canal
+                cols_canal = st.columns(len(canales_orden))
+                for col, canal in zip(cols_canal, canales_orden):
+                    c_items = [i for i in via_items if i['canal'] == canal]
+                    if not c_items:
+                        col.markdown(f"""
+                        <div style="background:#0F2040; border-radius:6px; padding:0.8rem;
+                             text-align:center; opacity:0.3; border:1px dashed #1A2E48;">
+                            <div style="color:#6B8099; font-size:0.75rem; font-weight:600;
+                            letter-spacing:1px;">CANAL {canal}</div>
+                            <div style="color:#6B8099; font-size:1.2rem;">—</div>
+                        </div>""", unsafe_allow_html=True)
+                        continue
+
+                    pct_c, in_c, out_c = calcular_kpi(c_items, True)
+                    canal_colors = {'VERDE': '#00C9A7', 'NARANJA': '#FF8C42', 'ROJO': '#FF3D5E'}
+                    cc = canal_colors.get(canal, '#6B8099')
+                    kpi_c = '#00C9A7' if pct_c >= 95 else ('#FF8C42' if pct_c >= 80 else '#FF3D5E')
+
+                    # Stats de tiempo
+                    hs_vals = [i['hs'] for i in c_items if i['hs'] is not None]
+                    avg_hs = f"{np.mean(hs_vals):.1f}hs" if hs_vals else "—"
+                    limite = c_items[0]['limite'] if c_items else '—'
+
+                    col.markdown(f"""
+                    <div style="background:#132236; border-top:3px solid {cc};
+                         border-radius:6px; padding:0.8rem; text-align:center;
+                         border:1px solid rgba(255,255,255,0.05);">
+                        <div style="color:{cc}; font-size:0.7rem; font-weight:700;
+                        letter-spacing:1px; text-transform:uppercase;">CANAL {canal}</div>
+                        <div style="color:{kpi_c}; font-size:1.6rem; font-weight:800;
+                        font-family:'Barlow Condensed',sans-serif; margin:0.2rem 0;">
+                            {pct_c:.1f}%</div>
+                        <div style="color:#9AB0C4; font-size:0.75rem;">{len(c_items)} ops</div>
+                        <div style="display:flex; justify-content:center; gap:0.5rem; margin-top:0.3rem;">
+                            <span style="color:#00C9A7; font-size:0.7rem; font-weight:600;">✓{in_c}</span>
+                            <span style="color:#FF3D5E; font-size:0.7rem; font-weight:600;">✗{out_c}</span>
+                        </div>
+                        <div style="color:#6B8099; font-size:0.65rem; margin-top:0.2rem;">
+                            Prom: {avg_hs} · Lím: {limite}hs</div>
+                    </div>""", unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+            # Tabla resumen de la razón social
+            with st.expander(f"📋 Ver tabla resumen {razon}"):
+                filas = []
+                for via in vias_orden:
+                    for canal in canales_orden:
+                        c_items = [i for i in r_items if i['via'] == via and i['canal'] == canal]
+                        if not c_items: continue
+                        pct_c, in_c, out_c = calcular_kpi(c_items, True)
+                        hs_vals = [i['hs'] for i in c_items if i['hs'] is not None]
+                        filas.append({
+                            'Vía': via, 'Canal': canal,
+                            'Total': len(c_items), 'IN': in_c, 'OUT': out_c,
+                            'KPI %': f"{pct_c:.1f}%",
+                            'Prom hs': f"{np.mean(hs_vals):.1f}" if hs_vals else '—',
+                            'Límite hs': c_items[0]['limite']
+                        })
+                if filas:
+                    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+
+    with tab5:
         st.markdown('<div class="section-header">KPI CERTIFICADOS MINEROS</div>', unsafe_allow_html=True)
         pct_cm_pre, in_cm, out_cm = calcular_kpi(cm_pre_items, True)
 
         c1,c2,c3,c4 = st.columns(4)
-        c1.plotly_chart(chart_gauge(pct_cm_pre, "KPI Presentación"), use_container_width=True)
+        c1.plotly_chart(chart_gauge(pct_cm_pre, "KPI Presentación"), use_container_width=True, key="gauge_cm")
         c2.markdown(metric_html(str(len(cm_pre_items)), "Total expedientes", "Presentados"), unsafe_allow_html=True)
         c3.markdown(metric_html(str(in_cm), "IN", "Dentro del rango", 'accent'), unsafe_allow_html=True)
         c4.markdown(metric_html(str(out_cm), "OUT", "Fuera del rango", 'red' if out_cm else 'accent'), unsafe_allow_html=True)
@@ -1089,7 +1204,7 @@ elif st.session_state.step == 3:
             fig.update_layout(**CHART_LAYOUT, height=280)
             fig.update_xaxes(title="Rango (días corridos)")
             fig.update_yaxes(title="Cantidad de expedientes")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="bar_cm_apr")
 
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2 = st.columns([1, 3])
