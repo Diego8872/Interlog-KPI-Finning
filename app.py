@@ -345,11 +345,15 @@ def chart_hbar(labels, values, kpi_pcts, colors=None):
             name=lbl, showlegend=False
         ))
     fig.update_layout(
-        **CHART_LAYOUT, height=max(120, len(labels) * 55 + 40),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(19,34,54,0.8)',
+        font=dict(family='Barlow, sans-serif', color='#9AB0C4'),
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=max(120, len(labels) * 55 + 40),
         barmode='overlay',
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-        yaxis=dict(tickfont=dict(size=11, family='Barlow', color='#9AB0C4')),
     )
+    fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
+    fig.update_yaxes(tickfont=dict(size=11, family='Barlow', color='#9AB0C4'))
     return fig
 
 def chart_donut(labels, values, colors, title=''):
@@ -949,7 +953,7 @@ elif st.session_state.step == 2:
                                 return 'background-color: rgba(0,201,167,0.15); color: #00C9A7; font-weight:bold'
                             return ''
                         st.dataframe(
-                            df_prev.style.applymap(color_param, subset=['Parámetro']),
+                            df_prev.style.map(color_param, subset=['Parámetro']),
                             use_container_width=True, hide_index=True
                         )
 
