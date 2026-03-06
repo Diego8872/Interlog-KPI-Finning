@@ -416,7 +416,145 @@ def chart_stacked_canales(nombre, items):
     return fig
 
 # ─────────────────────────────────────────────
-# EXPORT EXCEL DESVÍOS
+# GENERAR EXCEL DE DESVÍOS ESTILIZADO
+# ─────────────────────────────────────────────
+def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    DARK_BG = "0D1B2A"; MID_BG = "1B2B3E"; CARD = "132236"
+    ACCENT  = "008B74"; GOLD = "FFD060";  ROJO = "FF3D5E"
+    WHITE   = "FFFFFF"; LGRAY = "9AB0C4"; PURPLE = "5B21B6"
+
+    def hfill(c): return PatternFill("solid", fgColor=c)
+    def bw(s=10):  return Font(bold=True, color=WHITE, size=s, name="Calibri")
+    def nw(s=10):  return Font(color=WHITE, size=s, name="Calibri")
+    def nr(s=10):  return Font(color=ROJO, size=s, name="Calibri", bold=True)
+    def ng(s=10):  return Font(color=GOLD, size=s, name="Calibri", bold=True)
+    def cen():     return Alignment(horizontal="center", vertical="center", wrap_text=True)
+    def lft():     return Alignment(horizontal="left",   vertical="center", wrap_text=True)
+    def brd():
+        s = Side(border_style="thin", color="1B2B3E")
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    wb = Workbook()
+
+    def make_sheet(ws, title_text, headers, rows_data, header_color, col_widths,
+                   edit_cols, ref_col_idx=None):
+        # Título
+        ws.merge_cells(f"A1:{get_column_letter(len(headers))}1")
+        ws["A1"] = title_text
+        ws["A1"].font = bw(13); ws["A1"].fill = hfill(DARK_BG)
+        ws["A1"].alignment = cen(); ws.row_dimensions[1].height = 30
+
+        # Subtítulo
+        ws.merge_cells(f"A2:{get_column_letter(len(headers))}2")
+        ws["A2"] = "⚠️  Completar columnas DESVÍO y PARÁMETRO — Si Parámetro ≠ INTERLOG la operación se considera IN"
+        ws["A2"].font = Font(color=GOLD, size=9, name="Calibri")
+        ws["A2"].fill = hfill(MID_BG); ws["A2"].alignment = cen()
+        ws.row_dimensions[2].height = 20
+
+        # Headers
+        for ci, h in enumerate(headers, 1):
+            cell = ws.cell(3, ci, h)
+            cell.font = bw(10); cell.fill = hfill(header_color)
+            cell.alignment = cen(); cell.border = brd()
+        ws.row_dimensions[3].height = 25
+
+        # Datos
+        if not rows_data:
+            ws.merge_cells(f"A4:{get_column_letter(len(headers))}4")
+            ws["A4"] = "✅  Sin desvíos detectados — KPI 100%"
+            ws["A4"].font = Font(color="00C9A7", size=11, bold=True, name="Calibri")
+            ws["A4"].fill = hfill(MID_BG); ws["A4"].alignment = cen()
+            ws.row_dimensions[4].height = 30
+        else:
+            for ri, row_vals in enumerate(rows_data, 4):
+                fill_c = CARD if ri % 2 == 0 else MID_BG
+                for ci, val in enumerate(row_vals, 1):
+                    cell = ws.cell(ri, ci, val)
+                    cell.border = brd()
+                    cell.alignment = cen() if ci > 1 else lft()
+                    if ci in edit_cols:
+                        cell.fill = hfill("1A3A2A"); cell.font = ng(10)
+                    elif ci == ref_col_idx:
+                        cell.fill = hfill(fill_c); cell.font = bw(10)
+                    else:
+                        cell.fill = hfill(fill_c)
+                        # Hs en rojo
+                        if headers[ci-1] in ['Hs Transcurridas']:
+                            cell.font = nr(10)
+                        else:
+                            cell.font = nw(10)
+                ws.row_dimensions[ri].height = 20
+
+        # Anchos
+        for i, w in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+        ws.freeze_panes = "A4"
+
+    # ── HOJA 1: LIBERADAS ──
+    ws1 = wb.active; ws1.title = "LIBERADAS - DESVÍOS"
+    lib_desvios = [i for i in lib_items if i['desvio']]
+    rows_lib = [[
+        'FASA' if i['razon'] == FASA else 'FSM',
+        i['ref'], str(i['carpeta']), i['via'], i['canal'],
+        i['f_ofi'].strftime('%d/%m/%Y') if i['f_ofi'] else '',
+        i['f_cancel'].strftime('%d/%m/%Y %H:%M') if i['f_cancel'] else '',
+        i['hs'], i['limite'], '', ''
+    ] for i in lib_desvios]
+    make_sheet(ws1,
+        f"LIBERADAS {mes} — OPERACIONES CON DESVÍO",
+        ["Razón Social","Referencia","Carpeta","Vía","Canal",
+         "F. Oficialización","F. Cancelada","Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+        rows_lib, ACCENT, [28,16,12,12,10,18,22,18,12,35,25],
+        edit_cols=[10,11], ref_col_idx=2
+    )
+
+    # ── HOJA 2: OFICIALIZADOS ──
+    ws2 = wb.create_sheet("OFICIALIZADOS - DESVÍOS")
+    ofi_desvios = [i for i in ofi_items if i['desvio']]
+    rows_ofi = [[
+        'FASA' if i['razon'] == FASA else 'FSM',
+        i['ref'], str(i['carpeta']), i['via'],
+        i['f_ofi'].strftime('%d/%m/%Y') if i['f_ofi'] else '',
+        i['f_ult'].strftime('%d/%m/%Y %H:%M') if i['f_ult'] else '',
+        i['hs'], i['limite'], '', ''
+    ] for i in ofi_desvios]
+    make_sheet(ws2,
+        f"OFICIALIZADOS {mes} — OPERACIONES CON DESVÍO",
+        ["Razón Social","Referencia","Carpeta","Vía",
+         "F. Oficialización","Último Evento","Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+        rows_ofi, "005F52", [28,16,12,12,18,22,18,12,35,25],
+        edit_cols=[9,10], ref_col_idx=2
+    )
+
+    # ── HOJA 3: CM PRESENTADOS ──
+    ws3 = wb.create_sheet("CM PRESENTADOS - DESVÍOS")
+    cm_desvios = [i for i in cm_pre_items if i['desvio']]
+    rows_cm = [[
+        str(i['carpeta']), str(i['exp']),
+        i['f_tad'].strftime('%d/%m/%Y') if i['f_tad'] else '',
+        i['f_ult'].strftime('%d/%m/%Y') if i['f_ult'] else '',
+        i['hs'], 48, '', ''
+    ] for i in cm_desvios]
+    make_sheet(ws3,
+        f"CM PRESENTADOS {mes} — OPERACIONES CON DESVÍO",
+        ["Carpeta","Expediente","TAD Subido","Último Evento",
+         "Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+        rows_cm, PURPLE, [12,28,18,18,18,12,35,25],
+        edit_cols=[7,8], ref_col_idx=2
+    )
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+# ─────────────────────────────────────────────
+# EXPORT EXCEL DESVÍOS (simple, para historial)
 # ─────────────────────────────────────────────
 def export_excel_desvios(lib_items, ofi_items, cm_pre_items):
     output = io.BytesIO()
@@ -648,77 +786,203 @@ elif st.session_state.step == 2:
             st.session_state.step = 3
             st.rerun()
     else:
-        st.markdown(f"""
-        <div class="alert-warn">
-        ⚠️  Se detectaron <b>{total_desvios} operaciones fuera del rango</b>.
-        Completá el motivo y el responsable para cada una antes de generar el informe.<br>
-        <small>Si el Parámetro no es <b>INTERLOG</b>, la operación se considera IN automáticamente.</small>
-        </div><br>
-        """, unsafe_allow_html=True)
+        # ── SUB-ESTADO: ¿ya descargó o está subiendo? ──
+        if 'desvio_sub_step' not in st.session_state:
+            st.session_state.desvio_sub_step = 'descargar'
 
-        # ── LIBERADAS ──
-        if desvios_lib:
-            st.markdown("**📦 LIBERADAS**")
-            for idx, item in enumerate(lib_items):
-                if not item['desvio']: continue
-                key = f"lib_{idx}"
-                with st.expander(f"🔴 {item['ref']} · {item['nombre']} · {item['via']} {item['canal']} · {item['hs']}hs (límite: {item['limite']}hs)"):
-                    c1, c2 = st.columns(2)
-                    item['desvio_desc'] = c1.text_input("Descripción del desvío", value=item.get('desvio_desc',''), key=f"desc_{key}")
-                    item['parametro']   = c2.text_input("Parámetro (responsable)", value=item.get('parametro',''), key=f"param_{key}",
-                                                         help="Ej: INTERLOG, ADUANA, TERMINAL, OPERATIVA, FERIADO...")
-                    if item['parametro']:
-                        if item['parametro'].upper() == 'INTERLOG':
-                            st.markdown('<span style="color:#FF3D5E; font-size:0.8rem; font-weight:600;">⛔ OUT — Imputable a INTERLOG</span>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<span style="color:#00C9A7; font-size:0.8rem; font-weight:600;">✅ IN — Imputable a {item["parametro"]}</span>', unsafe_allow_html=True)
+        # ──────────────────────────────────────────
+        # SUB-STEP A: DESCARGAR EXCEL
+        # ──────────────────────────────────────────
+        if st.session_state.desvio_sub_step == 'descargar':
+            st.markdown(f"""
+            <div class="alert-warn">
+            ⚠️  Se detectaron <b>{total_desvios} operaciones fuera del rango</b>.
+            Descargá el Excel, completá las columnas <b>DESVÍO</b> y <b>PARÁMETRO</b>, y volvé a subirlo.<br><br>
+            <small>💡 Si el Parámetro <b>no es INTERLOG</b> → la operación se considera <b>IN</b> automáticamente.</small>
+            </div><br>
+            """, unsafe_allow_html=True)
 
-        # ── OFICIALIZADOS ──
-        if desvios_ofi:
-            st.markdown("**📋 OFICIALIZADOS**")
-            for idx, item in enumerate(ofi_items):
-                if not item['desvio']: continue
-                key = f"ofi_{idx}"
-                with st.expander(f"🔴 {item['ref']} · {item['nombre']} · {item['via']} · {item['hs']}hs (límite: {item['limite']}hs)"):
-                    c1, c2 = st.columns(2)
-                    item['desvio_desc'] = c1.text_input("Descripción del desvío", value=item.get('desvio_desc',''), key=f"desc_{key}")
-                    item['parametro']   = c2.text_input("Parámetro (responsable)", value=item.get('parametro',''), key=f"param_{key}")
-                    if item['parametro']:
-                        if item['parametro'].upper() == 'INTERLOG':
-                            st.markdown('<span style="color:#FF3D5E; font-size:0.8rem; font-weight:600;">⛔ OUT — Imputable a INTERLOG</span>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<span style="color:#00C9A7; font-size:0.8rem; font-weight:600;">✅ IN — Imputable a {item["parametro"]}</span>', unsafe_allow_html=True)
+            # Generar Excel estilizado
+            excel_buf = generar_excel_desvios(lib_items, ofi_items, cm_pre_items,
+                                               st.session_state.mes or 'MES')
 
-        # ── CM PRESENTADOS ──
-        if desvios_cm:
-            st.markdown("**📜 CM PRESENTADOS**")
-            for idx, item in enumerate(cm_pre_items):
-                if not item['desvio']: continue
-                key = f"cm_{idx}"
-                with st.expander(f"🔴 {item['exp']} · {item['hs']}hs (límite: 48hs)"):
-                    c1, c2 = st.columns(2)
-                    item['desvio_desc'] = c1.text_input("Descripción del desvío", value=item.get('desvio_desc',''), key=f"desc_{key}")
-                    item['parametro']   = c2.text_input("Parámetro (responsable)", value=item.get('parametro',''), key=f"param_{key}")
+            c1, c2, c3 = st.columns([2, 2, 3])
+            with c1:
+                st.download_button(
+                    label="⬇  DESCARGAR EXCEL DE DESVÍOS",
+                    data=excel_buf,
+                    file_name=f"DESVIOS_{(st.session_state.mes or 'MES').replace(' ','_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            with c2:
+                if st.button("✅  YA LO COMPLETÉ — SUBIR AHORA", use_container_width=True):
+                    st.session_state.desvio_sub_step = 'subir'
+                    st.rerun()
+            with c3:
+                if st.button("◀  VOLVER A CARGAR ARCHIVOS", use_container_width=True):
+                    st.session_state.step = 1
+                    st.session_state.desvio_sub_step = 'descargar'
+                    st.rerun()
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        completados = sum(1 for i in desvios_lib + desvios_ofi + desvios_cm if i.get('parametro','').strip())
-        st.markdown(f"**{completados}/{total_desvios} desvíos completados**")
+        # ──────────────────────────────────────────
+        # SUB-STEP B: SUBIR EXCEL COMPLETADO
+        # ──────────────────────────────────────────
+        elif st.session_state.desvio_sub_step == 'subir':
+            st.markdown("""
+            <div class="alert-info">
+            📂 Subí el Excel de desvíos que ya completaste. El sistema leerá los campos
+            <b>DESVÍO</b> y <b>PARÁMETRO</b> de cada hoja y recalculará los KPIs.
+            </div><br>
+            """, unsafe_allow_html=True)
 
-        c1, c2 = st.columns([1, 3])
-        with c1:
-            if st.button("◀  VOLVER"):
-                st.session_state.step = 1
-                st.rerun()
-        with c2:
-            if st.button("▶  GENERAR DASHBOARD", disabled=(completados < total_desvios)):
-                st.session_state.lib_items    = lib_items
-                st.session_state.ofi_items    = ofi_items
-                st.session_state.cm_pre_items = cm_pre_items
-                st.session_state.step = 3
-                st.rerun()
+            f_desvios = st.file_uploader(
+                "📋 Excel de Desvíos completado",
+                type=['xlsx'], key='desvios_upload'
+            )
 
-        if completados < total_desvios:
-            st.markdown(f'<div class="alert-warn">Completá los {total_desvios - completados} desvíos restantes para continuar.</div>', unsafe_allow_html=True)
+            if f_desvios:
+                try:
+                    wb_dev = pd.ExcelFile(f_desvios)
+                    errores = []
+
+                    # ── Leer LIBERADAS ──
+                    if 'LIBERADAS - DESVÍOS' in wb_dev.sheet_names:
+                        df_dev_lib = wb_dev.parse('LIBERADAS - DESVÍOS', skiprows=2)
+                        # Normalizar columnas
+                        df_dev_lib.columns = [str(c).strip() for c in df_dev_lib.columns]
+                        col_desv  = next((c for c in df_dev_lib.columns if 'DESVÍO' in c or 'DESVIO' in c.upper()), None)
+                        col_param = next((c for c in df_dev_lib.columns if 'PARÁMETRO' in c or 'PARAMETRO' in c.upper()), None)
+                        col_ref   = next((c for c in df_dev_lib.columns if 'REFERENCIA' in c.upper() or 'REF' in c.upper()), None)
+
+                        if col_ref and col_param:
+                            ref_map = {}
+                            for _, row in df_dev_lib.iterrows():
+                                ref = str(row.get(col_ref, '')).strip()
+                                if ref:
+                                    ref_map[ref] = {
+                                        'desvio_desc': str(row.get(col_desv, '') or '').strip(),
+                                        'parametro':   str(row.get(col_param,'') or '').strip()
+                                    }
+                            for item in lib_items:
+                                if item['ref'] in ref_map:
+                                    item['desvio_desc'] = ref_map[item['ref']]['desvio_desc']
+                                    item['parametro']   = ref_map[item['ref']]['parametro']
+
+                    # ── Leer OFICIALIZADOS ──
+                    if 'OFICIALIZADOS - DESVÍOS' in wb_dev.sheet_names:
+                        df_dev_ofi = wb_dev.parse('OFICIALIZADOS - DESVÍOS', skiprows=2)
+                        df_dev_ofi.columns = [str(c).strip() for c in df_dev_ofi.columns]
+                        col_desv  = next((c for c in df_dev_ofi.columns if 'DESVÍO' in c or 'DESVIO' in c.upper()), None)
+                        col_param = next((c for c in df_dev_ofi.columns if 'PARÁMETRO' in c or 'PARAMETRO' in c.upper()), None)
+                        col_ref   = next((c for c in df_dev_ofi.columns if 'REFERENCIA' in c.upper() or 'REF' in c.upper()), None)
+
+                        if col_ref and col_param:
+                            ref_map = {}
+                            for _, row in df_dev_ofi.iterrows():
+                                ref = str(row.get(col_ref, '')).strip()
+                                if ref:
+                                    ref_map[ref] = {
+                                        'desvio_desc': str(row.get(col_desv, '') or '').strip(),
+                                        'parametro':   str(row.get(col_param,'') or '').strip()
+                                    }
+                            for item in ofi_items:
+                                if item['ref'] in ref_map:
+                                    item['desvio_desc'] = ref_map[item['ref']]['desvio_desc']
+                                    item['parametro']   = ref_map[item['ref']]['parametro']
+
+                    # ── Leer CM PRESENTADOS ──
+                    if 'CM PRESENTADOS - DESVÍOS' in wb_dev.sheet_names:
+                        df_dev_cm = wb_dev.parse('CM PRESENTADOS - DESVÍOS', skiprows=2)
+                        df_dev_cm.columns = [str(c).strip() for c in df_dev_cm.columns]
+                        col_desv  = next((c for c in df_dev_cm.columns if 'DESVÍO' in c or 'DESVIO' in c.upper()), None)
+                        col_param = next((c for c in df_dev_cm.columns if 'PARÁMETRO' in c or 'PARAMETRO' in c.upper()), None)
+                        col_exp   = next((c for c in df_dev_cm.columns if 'EXPEDIENTE' in c.upper() or 'EXP' in c.upper()), None)
+
+                        if col_exp and col_param:
+                            exp_map = {}
+                            for _, row in df_dev_cm.iterrows():
+                                exp = str(row.get(col_exp, '')).strip()
+                                if exp:
+                                    exp_map[exp] = {
+                                        'desvio_desc': str(row.get(col_desv, '') or '').strip(),
+                                        'parametro':   str(row.get(col_param,'') or '').strip()
+                                    }
+                            for item in cm_pre_items:
+                                if str(item['exp']).strip() in exp_map:
+                                    item['desvio_desc'] = exp_map[str(item['exp']).strip()]['desvio_desc']
+                                    item['parametro']   = exp_map[str(item['exp']).strip()]['parametro']
+
+                    # ── Verificar completitud ──
+                    pendientes_lib = [i for i in lib_items  if i['desvio'] and not i.get('parametro','').strip()]
+                    pendientes_ofi = [i for i in ofi_items  if i['desvio'] and not i.get('parametro','').strip()]
+                    pendientes_cm  = [i for i in cm_pre_items if i['desvio'] and not i.get('parametro','').strip()]
+                    total_pend = len(pendientes_lib) + len(pendientes_ofi) + len(pendientes_cm)
+
+                    if total_pend == 0:
+                        st.markdown('<div class="alert-success">✅ Todos los desvíos fueron completados correctamente.</div>', unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        # Preview tabla
+                        todos = (
+                            [{'Proceso':'LIBERADAS', 'Ref': i['ref'], 'Razón':i['nombre'],
+                              'Vía':i['via'], 'Canal':i.get('canal',''), 'Hs':i['hs'],
+                              'Límite':i['limite'], 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
+                             for i in lib_items if i['desvio']] +
+                            [{'Proceso':'OFICIALIZADOS', 'Ref': i['ref'], 'Razón':i['nombre'],
+                              'Vía':i['via'], 'Canal':'', 'Hs':i['hs'],
+                              'Límite':i['limite'], 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
+                             for i in ofi_items if i['desvio']] +
+                            [{'Proceso':'CM PRES.', 'Ref': i['exp'], 'Razón':'',
+                              'Vía':'', 'Canal':'', 'Hs':i['hs'],
+                              'Límite':48, 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
+                             for i in cm_pre_items if i['desvio']]
+                        )
+                        df_prev = pd.DataFrame(todos)
+                        # Color por parámetro
+                        def color_param(val):
+                            if str(val).upper() == 'INTERLOG':
+                                return 'background-color: rgba(255,61,94,0.2); color: #FF3D5E; font-weight:bold'
+                            elif val:
+                                return 'background-color: rgba(0,201,167,0.15); color: #00C9A7; font-weight:bold'
+                            return ''
+                        st.dataframe(
+                            df_prev.style.applymap(color_param, subset=['Parámetro']),
+                            use_container_width=True, hide_index=True
+                        )
+
+                        c1, c2 = st.columns([1, 3])
+                        with c2:
+                            if st.button("▶  GENERAR DASHBOARD", use_container_width=True):
+                                st.session_state.lib_items    = lib_items
+                                st.session_state.ofi_items    = ofi_items
+                                st.session_state.cm_pre_items = cm_pre_items
+                                st.session_state.desvio_sub_step = 'descargar'
+                                st.session_state.step = 3
+                                st.rerun()
+                    else:
+                        st.markdown(f'<div class="alert-warn">⚠️ Faltan completar {total_pend} desvíos. Revisá el Excel y volvé a subirlo.</div>', unsafe_allow_html=True)
+                        if pendientes_lib:
+                            st.markdown("**Sin completar en LIBERADAS:**")
+                            for i in pendientes_lib:
+                                st.markdown(f"- `{i['ref']}` · {i['nombre']} · {i['via']} {i.get('canal','')}")
+                        if pendientes_ofi:
+                            st.markdown("**Sin completar en OFICIALIZADOS:**")
+                            for i in pendientes_ofi:
+                                st.markdown(f"- `{i['ref']}` · {i['nombre']}")
+                        if pendientes_cm:
+                            st.markdown("**Sin completar en CM PRESENTADOS:**")
+                            for i in pendientes_cm:
+                                st.markdown(f"- `{i['exp']}`")
+
+                except Exception as e:
+                    st.markdown(f'<div class="alert-warn">❌ Error al leer el Excel: {str(e)}</div>', unsafe_allow_html=True)
+
+            c1, c2 = st.columns([1, 3])
+            with c1:
+                if st.button("◀  VOLVER"):
+                    st.session_state.desvio_sub_step = 'descargar'
+                    st.rerun()
 
 # ══════════════════════════════════════════════
 # STEP 3 — DASHBOARD
