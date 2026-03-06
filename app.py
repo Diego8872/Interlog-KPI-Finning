@@ -1250,8 +1250,25 @@ elif st.session_state.step == 4:
 
     with c2:
         st.markdown("### 📑 PowerPoint")
-        st.markdown("Generación automática del informe completo con todos los gráficos.")
-        st.markdown('<div class="alert-warn">⚙️ Próximamente — en desarrollo</div>', unsafe_allow_html=True)
+        st.markdown("Informe completo con todos los gráficos, listo para presentar.")
+        if st.button("⚙️  GENERAR POWERPOINT", use_container_width=True):
+            with st.spinner("Generando PowerPoint... (~20 segundos)"):
+                try:
+                    from ppt_generator import generar_ppt
+                    ppt_buf = generar_ppt(
+                        lib_items, ofi_items, cm_pre_items, cm_apr_items,
+                        mes=st.session_state.mes or 'MES'
+                    )
+                    st.download_button(
+                        label="⬇  DESCARGAR POWERPOINT",
+                        data=ppt_buf,
+                        file_name=f"KPI_INTERLOG_{(st.session_state.mes or 'MES').replace(' ','_')}.pptx",
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        use_container_width=True
+                    )
+                    st.markdown('<div class="alert-success">✅ PowerPoint generado correctamente — 9 slides</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.markdown(f'<div class="alert-warn">❌ Error al generar PowerPoint: {str(e)}</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("◀  VOLVER AL DASHBOARD"):
