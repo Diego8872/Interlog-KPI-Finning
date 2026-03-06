@@ -393,9 +393,15 @@ def chart_scatter_tiempo(items, limite, title=''):
         marker=dict(color=colors, size=10, line=dict(color='white', width=1.5)),
         hovertemplate='Op %{x}: %{y:.1f} hs<extra></extra>'
     ))
-    fig.update_layout(**CHART_LAYOUT, height=220,
-        xaxis=dict(showticklabels=False, title='Operaciones'),
-        yaxis=dict(title='Horas hábiles'))
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(19,34,54,0.8)',
+        font=dict(family='Barlow, sans-serif', color='#9AB0C4'),
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=220,
+    )
+    fig.update_xaxes(showticklabels=False, title='Operaciones')
+    fig.update_yaxes(title='Horas hábiles')
     return fig
 
 def chart_stacked_canales(nombre, items):
@@ -415,10 +421,16 @@ def chart_stacked_canales(nombre, items):
     fig.add_trace(go.Bar(name='Verde',   x=labels, y=verde_v,   marker_color=COLORS['verde'],   text=verde_v,   textposition='inside', textfont=dict(color='white', size=11)))
     fig.add_trace(go.Bar(name='Naranja', x=labels, y=naranja_v, marker_color=COLORS['naranja'], text=naranja_v, textposition='inside', textfont=dict(color='white', size=11)))
     fig.add_trace(go.Bar(name='Rojo',    x=labels, y=rojo_v,    marker_color=COLORS['rojo'],    text=rojo_v,    textposition='inside', textfont=dict(color='white', size=11)))
-    fig.update_layout(**CHART_LAYOUT, barmode='stack', height=280,
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(19,34,54,0.8)',
+        font=dict(family='Barlow, sans-serif', color='#9AB0C4'),
+        margin=dict(l=10, r=10, t=30, b=10),
+        barmode='stack', height=280,
         legend=dict(orientation='h', yanchor='bottom', y=1.02,
                     font=dict(color='#9AB0C4', size=11)),
-        xaxis=dict(tickfont=dict(size=11, color='#9AB0C4')))
+    )
+    fig.update_xaxes(tickfont=dict(size=11, color='#9AB0C4'))
     return fig
 
 # ─────────────────────────────────────────────
@@ -1074,9 +1086,9 @@ elif st.session_state.step == 3:
                 text=values, textposition='outside',
                 textfont=dict(color='#F0F4F8', size=12)
             ))
-            fig.update_layout(**CHART_LAYOUT, height=280,
-                xaxis=dict(title="Rango (días corridos)"),
-                yaxis=dict(title="Cantidad de expedientes"))
+            fig.update_layout(**CHART_LAYOUT, height=280)
+            fig.update_xaxes(title="Rango (días corridos)")
+            fig.update_yaxes(title="Cantidad de expedientes")
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
