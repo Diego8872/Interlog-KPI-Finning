@@ -1226,6 +1226,7 @@ elif st.session_state.step == 4:
     lib_items    = st.session_state.lib_items
     ofi_items    = st.session_state.ofi_items
     cm_pre_items = st.session_state.cm_pre_items
+    cm_apr_items = st.session_state.cm_apr_items
     mes          = st.session_state.mes or 'MES'
 
     st.markdown("""
