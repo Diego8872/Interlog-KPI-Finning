@@ -620,6 +620,7 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
 
     pct_lib, in_lib, out_lib = calcular_kpi(lib_r, con_param)
     pct_ofi, in_ofi, out_ofi = calcular_kpi(ofi_r, con_param)
+    n = nombre.lower()  # 'fasa' o 'fsm' — usado como sufijo de key
 
     st.markdown(f'<div class="section-header">MODAL MULTIMODAL · {nombre}</div>', unsafe_allow_html=True)
 
@@ -628,7 +629,7 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
     with col1:
         st.markdown("**OFICIALIZACIÓN**")
         c1, c2, c3 = st.columns(3)
-        c1.plotly_chart(chart_gauge(pct_ofi, "KPI IN"), use_container_width=True)
+        c1.plotly_chart(chart_gauge(pct_ofi, "KPI IN"), use_container_width=True, key=f"gauge_ofi_{n}")
 
         params_ofi = Counter(i['parametro'] or 'S/DESVIO' for i in ofi_r if not i['desvio'])
         params_ofi.update({i['parametro'] or 'PENDIENTE': 1 for i in ofi_r if i['desvio']})
@@ -638,7 +639,7 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
         kpi_p = [v/len(ofi_r)*100 for v in vals]
 
         with c2:
-            st.plotly_chart(chart_hbar(lbls, vals, kpi_p, cols_bar), use_container_width=True)
+            st.plotly_chart(chart_hbar(lbls, vals, kpi_p, cols_bar), use_container_width=True, key=f"hbar_ofi_{n}")
         with c3:
             st.markdown(metric_html(str(len(ofi_r)), "Total ops", None, 'accent'), unsafe_allow_html=True)
             st.markdown(metric_html(str(in_ofi), "IN", None, 'accent'), unsafe_allow_html=True)
@@ -647,8 +648,7 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
     with col2:
         st.markdown("**LIBERACIÓN**")
         c1, c2, c3 = st.columns(3)
-        kpi_col = 'accent' if pct_lib >= 95 else ('orange' if pct_lib >= 80 else 'red')
-        c1.plotly_chart(chart_gauge(pct_lib, "KPI IN"), use_container_width=True)
+        c1.plotly_chart(chart_gauge(pct_lib, "KPI IN"), use_container_width=True, key=f"gauge_lib_{n}")
 
         params_lib = Counter(i['parametro'] or 'S/DESVIO' for i in lib_r if not i['desvio'])
         params_lib.update({i['parametro'] or 'PENDIENTE': 1 for i in lib_r if i['desvio']})
@@ -658,7 +658,7 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
         kpi_p = [v/len(lib_r)*100 for v in vals]
 
         with c2:
-            st.plotly_chart(chart_hbar(lbls, vals, kpi_p, cols_bar), use_container_width=True)
+            st.plotly_chart(chart_hbar(lbls, vals, kpi_p, cols_bar), use_container_width=True, key=f"hbar_lib_{n}")
         with c3:
             st.markdown(metric_html(str(len(lib_r)), "Total ops", None, 'accent'), unsafe_allow_html=True)
             st.markdown(metric_html(str(in_lib), "IN", None, 'accent'), unsafe_allow_html=True)
@@ -677,13 +677,13 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
 
         fig_scatter = chart_scatter_tiempo(va, 24)
         if fig_scatter:
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_scatter, use_container_width=True, key=f"scatter_va_{n}")
 
     # Canales
     st.markdown(f'<div class="section-header" style="border-color:#FFD060">DISTRIBUCIÓN DE CANALES · {nombre}</div>', unsafe_allow_html=True)
     fig_canal = chart_stacked_canales(nombre, lib_r)
     if fig_canal:
-        st.plotly_chart(fig_canal, use_container_width=True)
+        st.plotly_chart(fig_canal, use_container_width=True, key=f"stacked_{n}")
 
 # ─────────────────────────────────────────────
 # MAIN APP
