@@ -586,44 +586,252 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
 
 
 # ─────────────────────────────────────────────
-# EXPORT EXCEL DESVÍOS (simple, para historial)
+# EXPORT DASHBOARD COMPLETO A EXCEL
 # ─────────────────────────────────────────────
-def export_excel_desvios(lib_items, ofi_items, cm_pre_items):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Liberadas
-        lib_desvios = [i for i in lib_items if i['desvio']]
-        if lib_desvios:
-            df = pd.DataFrame([{
-                'Razón Social': i['nombre'], 'Referencia': i['ref'],
-                'Vía': i['via'], 'Canal': i['canal'],
-                'Días Hábiles': i['hs'], 'Límite (días)': i['limite'],
-                'DESVÍO': i.get('desvio_desc',''), 'PARÁMETRO': i.get('parametro','')
-            } for i in lib_desvios])
-            df.to_excel(writer, sheet_name='LIBERADAS - DESVÍOS', index=False)
+def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
 
-        # Oficializados
-        ofi_desvios = [i for i in ofi_items if i['desvio']]
-        if ofi_desvios:
-            df = pd.DataFrame([{
-                'Razón Social': i['nombre'], 'Referencia': i['ref'],
-                'Vía': i['via'], 'Días Hábiles': i['hs'], 'Límite (días)': i['limite'],
-                'DESVÍO': i.get('desvio_desc',''), 'PARÁMETRO': i.get('parametro','')
-            } for i in ofi_desvios])
-            df.to_excel(writer, sheet_name='OFICIALIZADOS - DESVÍOS', index=False)
+    DARK='0D1B2A'; MID='1B2B3E'; CARD='132236'; CARD2='1A2E48'
+    ACCENT='008B74'; GOLD='FFD060'; ROJO_C='FF3D5E'; WHITE='FFFFFF'
+    ORANGE='CC6600'; VERDE_C='007A65'; LGRAY='9AB0C4'
 
-        # CM Presentados
-        cm_desvios = [i for i in cm_pre_items if i['desvio']]
-        if cm_desvios:
-            df = pd.DataFrame([{
-                'Carpeta': i['carpeta'], 'Expediente': i['exp'],
-                'Hs Transcurridas': i['hs'], 'Límite (hs)': 48,
-                'DESVÍO': i.get('desvio_desc',''), 'PARÁMETRO': i.get('parametro','')
-            } for i in cm_desvios])
-            df.to_excel(writer, sheet_name='CM PRESENTADOS - DESVÍOS', index=False)
+    def hf(c): return PatternFill("solid", fgColor=c)
+    def fw(s=10, bold=False): return Font(bold=bold, color=WHITE, size=s, name="Calibri")
+    def fg(s=10): return Font(bold=True, color=GOLD, size=s, name="Calibri")
+    def fr(s=10): return Font(bold=True, color=ROJO_C, size=s, name="Calibri")
+    def fa(s=10): return Font(bold=True, color='00C9A7', size=s, name="Calibri")
+    def cen(): return Alignment(horizontal="center", vertical="center", wrap_text=True)
+    def lft(): return Alignment(horizontal="left", vertical="center", wrap_text=True)
+    def brd():
+        s = Side(border_style="thin", color="1B2B3E")
+        return Border(left=s, right=s, top=s, bottom=s)
 
-    output.seek(0)
-    return output
+    def write_title(ws, text, ncols, row=1, height=30):
+        ws.merge_cells(f"A{row}:{get_column_letter(ncols)}{row}")
+        c = ws.cell(row, 1, text)
+        c.font = fw(13, True); c.fill = hf(DARK); c.alignment = cen()
+        ws.row_dimensions[row].height = height
+
+    def write_headers(ws, headers, row, fill_hex):
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(row, ci, h)
+            c.font = fw(10, True); c.fill = hf(fill_hex)
+            c.alignment = cen(); c.border = brd()
+        ws.row_dimensions[row].height = 24
+
+    def write_row(ws, row_num, values, row_fill):
+        for ci, val in enumerate(values, 1):
+            c = ws.cell(row_num, ci, val)
+            c.border = brd(); c.alignment = cen()
+            c.fill = hf(row_fill); c.font = fw(10)
+
+    def set_col_widths(ws, widths):
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    def kpi_font(pct):
+        if pct >= 95: return fa()
+        if pct >= 80: return Font(bold=True, color=ORANGE, size=10, name="Calibri")
+        return fr()
+
+    def param_font(param):
+        if str(param).upper() == 'INTERLOG': return fr()
+        if param: return fa()
+        return fw(10)
+
+    wb = Workbook()
+
+    # ══════════════════════════════════════════
+    # HOJA 1 — RESUMEN EJECUTIVO
+    # ══════════════════════════════════════════
+    ws1 = wb.active; ws1.title = "RESUMEN EJECUTIVO"
+    ws1.sheet_view.showGridLines = False
+    write_title(ws1, f"RESUMEN EJECUTIVO · KPI {mes}", 7)
+    write_headers(ws1, ["Proceso","Razón Social","Total Ops","IN","OUT","KPI %","Target"], 2, ACCENT)
+
+    filas_res = []
+    for proc, items, nombre in [
+        ("LIBERACIÓN", lib_items, "FASA"), ("LIBERACIÓN", lib_items, "FSM"),
+        ("OFICIALIZACIÓN", ofi_items, "FASA"), ("OFICIALIZACIÓN", ofi_items, "FSM"),
+    ]:
+        sub = [i for i in items if i['nombre'] == nombre]
+        pct, in_c, out_c = calcular_kpi(sub, True)
+        filas_res.append([proc, nombre, len(sub), in_c, out_c, f"{pct:.1f}%", "95%"])
+    sub_cm = cm_pre_items
+    pct_cm, in_cm, out_cm = calcular_kpi(sub_cm, True)
+    filas_res.append(["CM PRESENTADOS", "FASA+FSM", len(sub_cm), in_cm, out_cm, f"{pct_cm:.1f}%", "95%"])
+
+    for ri, vals in enumerate(filas_res, 3):
+        fill_c = CARD if ri % 2 == 1 else MID
+        write_row(ws1, ri, vals, fill_c)
+        pct_val = float(vals[5].replace('%',''))
+        ws1.cell(ri, 6).font = kpi_font(pct_val)
+    set_col_widths(ws1, [20, 14, 12, 8, 8, 10, 10])
+    ws1.freeze_panes = "A3"
+
+    # ══════════════════════════════════════════
+    # HOJA 2 — LIBERACIONES DETALLE
+    # ══════════════════════════════════════════
+    ws2 = wb.create_sheet("LIBERACIONES - DETALLE")
+    ws2.sheet_view.showGridLines = False
+    write_title(ws2, f"LIBERACIONES · DETALLE POR SOCIEDAD, VÍA Y CANAL · {mes}", 12)
+    headers_lib = ["Razón Social","Vía","Canal","Total Ops","IN","OUT","KPI %",
+                   "Prom Días","Límite Días","Referencia","DESVÍO","PARÁMETRO"]
+    write_headers(ws2, headers_lib, 2, ACCENT)
+
+    ri = 3
+    vias_orden = ['AVION','CAMION','MARITIMO']
+    canales_orden = ['VERDE','NARANJA','ROJO']
+    for nombre in ['FASA','FSM']:
+        for via in vias_orden:
+            for canal in canales_orden:
+                ops = [i for i in lib_items if i['nombre']==nombre and i['via']==via and i['canal']==canal]
+                if not ops: continue
+                pct, in_c, out_c = calcular_kpi(ops, True)
+                dias_vals = [i['hs'] for i in ops if i['hs'] is not None]
+                avg_dias = round(np.mean(dias_vals), 1) if dias_vals else ''
+                limite = ops[0]['limite']
+                fill_c = CARD if ri % 2 == 1 else MID
+
+                # Fila resumen del grupo
+                ws2.cell(ri, 1, nombre).font = fw(10, True)
+                ws2.cell(ri, 1).fill = hf(fill_c); ws2.cell(ri, 1).border = brd(); ws2.cell(ri, 1).alignment = cen()
+                for ci, val in enumerate([via, canal, len(ops), in_c, out_c, f"{pct:.1f}%", avg_dias, limite, '', '', ''], 2):
+                    c = ws2.cell(ri, ci, val)
+                    c.fill = hf(fill_c); c.border = brd(); c.alignment = cen()
+                    if ci == 7: c.font = kpi_font(pct)
+                    elif ci == 3:
+                        cc = {'VERDE': VERDE_C, 'NARANJA': ORANGE, 'ROJO': '880022'}.get(canal, MID)
+                        c.fill = hf(cc); c.font = fw(10, True)
+                    else: c.font = fw(10)
+                ws2.row_dimensions[ri].height = 20
+                ri += 1
+
+                # Filas detalle — solo desvíos
+                for op in [o for o in ops if o['desvio']]:
+                    fill_d = '1A0A0A'
+                    for ci, val in enumerate(['', '', '', '', '', '', '', '', '',
+                                              op['ref'], op.get('desvio_desc',''), op.get('parametro','')], 1):
+                        c = ws2.cell(ri, ci, val)
+                        c.fill = hf(fill_d); c.border = brd(); c.alignment = lft() if ci >= 10 else cen()
+                        if ci == 12: c.font = param_font(op.get('parametro',''))
+                        elif ci == 11: c.font = fg(9)
+                        else: c.font = fw(9)
+                    ws2.row_dimensions[ri].height = 18
+                    ri += 1
+
+    set_col_widths(ws2, [14,12,10,10,8,8,10,10,10,18,35,20])
+    ws2.freeze_panes = "A3"
+
+    # ══════════════════════════════════════════
+    # HOJA 3 — OFICIALIZACIONES DETALLE
+    # ══════════════════════════════════════════
+    ws3 = wb.create_sheet("OFICIALIZACIONES - DETALLE")
+    ws3.sheet_view.showGridLines = False
+    write_title(ws3, f"OFICIALIZACIONES · DETALLE POR SOCIEDAD Y VÍA · {mes}", 10)
+    headers_ofi = ["Razón Social","Vía","Total Ops","IN","OUT","KPI %",
+                   "Prom Hs","Límite Hs","DESVÍO","PARÁMETRO"]
+    write_headers(ws3, headers_ofi, 2, '005F52')
+
+    ri = 3
+    for nombre in ['FASA','FSM']:
+        for via in vias_orden:
+            ops = [i for i in ofi_items if i['nombre']==nombre and i['via']==via]
+            if not ops: continue
+            pct, in_c, out_c = calcular_kpi(ops, True)
+            hs_vals = [i['hs'] for i in ops if i['hs'] is not None]
+            avg_hs = round(np.mean(hs_vals), 1) if hs_vals else ''
+            limite = ops[0]['limite']
+            fill_c = CARD if ri % 2 == 1 else MID
+
+            ws3.cell(ri, 1, nombre).font = fw(10, True)
+            ws3.cell(ri, 1).fill = hf(fill_c); ws3.cell(ri, 1).border = brd(); ws3.cell(ri, 1).alignment = cen()
+            for ci, val in enumerate([via, len(ops), in_c, out_c, f"{pct:.1f}%", avg_hs, limite, '', ''], 2):
+                c = ws3.cell(ri, ci, val)
+                c.fill = hf(fill_c); c.border = brd(); c.alignment = cen()
+                if ci == 6: c.font = kpi_font(pct)
+                else: c.font = fw(10)
+            ws3.row_dimensions[ri].height = 20
+            ri += 1
+
+            for op in [o for o in ops if o['desvio']]:
+                fill_d = '1A0A0A'
+                for ci, val in enumerate(['','','','','','','','',
+                                          op.get('desvio_desc',''), op.get('parametro','')], 1):
+                    c = ws3.cell(ri, ci, val)
+                    c.fill = hf(fill_d); c.border = brd(); c.alignment = lft() if ci >= 9 else cen()
+                    if ci == 10: c.font = param_font(op.get('parametro',''))
+                    elif ci == 9: c.font = fg(9)
+                    else: c.font = fw(9)
+                ws3.row_dimensions[ri].height = 18
+                ri += 1
+
+    set_col_widths(ws3, [14,12,10,8,8,10,10,10,35,20])
+    ws3.freeze_panes = "A3"
+
+    # ══════════════════════════════════════════
+    # HOJA 4 — CM PRESENTADOS
+    # ══════════════════════════════════════════
+    ws4 = wb.create_sheet("CM PRESENTADOS")
+    ws4.sheet_view.showGridLines = False
+    write_title(ws4, f"CERTIFICADOS MINEROS PRESENTADOS · {mes}", 8)
+    headers_cm = ["Carpeta","Expediente","TAD Subido","Último Evento",
+                  "Hs Transcurridas","Límite (hs)","DESVÍO","PARÁMETRO"]
+    write_headers(ws4, headers_cm, 2, '5B21B6')
+
+    for ri, i in enumerate(cm_pre_items, 3):
+        fill_c = CARD if ri % 2 == 1 else MID
+        vals = [
+            str(i.get('carpeta','')), str(i['exp']),
+            i['f_tad'].strftime('%d/%m/%Y') if i.get('f_tad') else '',
+            i['f_ult'].strftime('%d/%m/%Y') if i.get('f_ult') else '',
+            i['hs'], 48,
+            i.get('desvio_desc','') if i['desvio'] else '',
+            i.get('parametro','') if i['desvio'] else '',
+        ]
+        for ci, val in enumerate(vals, 1):
+            c = ws4.cell(ri, ci, val)
+            c.fill = hf('1A0A0A' if i['desvio'] else fill_c)
+            c.border = brd(); c.alignment = lft() if ci >= 7 else cen()
+            if ci == 8: c.font = param_font(i.get('parametro',''))
+            elif ci == 7 and i['desvio']: c.font = fg(10)
+            else: c.font = fw(10)
+        ws4.row_dimensions[ri].height = 20
+
+    set_col_widths(ws4, [12,28,16,16,16,12,35,20])
+    ws4.freeze_panes = "A3"
+
+    # ══════════════════════════════════════════
+    # HOJA 5 — CM APROBADOS
+    # ══════════════════════════════════════════
+    if cm_apr_items:
+        ws5 = wb.create_sheet("CM APROBADOS")
+        ws5.sheet_view.showGridLines = False
+        write_title(ws5, f"CERTIFICADOS MINEROS APROBADOS · {mes}", 4)
+        write_headers(ws5, ["Carpeta","Expediente","Días para aprobación","Rango"], 2, '5B21B6')
+        rango_colors = {'0 a 7': VERDE_C, '8 a 15': ORANGE, '+15': '880022'}
+        for ri, i in enumerate(cm_apr_items, 3):
+            fill_c = CARD if ri % 2 == 1 else MID
+            vals = [str(i.get('carpeta','')), str(i['exp']),
+                    i['dias'] if i['dias'] is not None else '', i['rango'] or '']
+            for ci, val in enumerate(vals, 1):
+                c = ws5.cell(ri, ci, val)
+                c.fill = hf(fill_c); c.border = brd(); c.alignment = cen()
+                if ci == 4 and i['rango']:
+                    c.fill = hf(rango_colors.get(i['rango'], MID))
+                    c.font = fw(10, True)
+                else:
+                    c.font = fw(10)
+            ws5.row_dimensions[ri].height = 20
+        set_col_widths(ws5, [12,28,22,14])
+        ws5.freeze_panes = "A3"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
 
 # ─────────────────────────────────────────────
 # SECCIÓN KPI
@@ -1333,23 +1541,34 @@ elif st.session_state.step == 4:
 
     st.markdown("""
     <div class="alert-info">
-    Descargá el Excel con todos los desvíos justificados para tu registro,
-    y el PowerPoint del informe completo listo para presentar.
+    Descargá el <b>Excel completo del dashboard</b> con toda la información que sostiene los KPIs,
+    o el <b>PowerPoint</b> del informe listo para presentar.
     </div><br>
     """, unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
 
     with c1:
-        st.markdown("### 📊 Excel de Desvíos")
-        st.markdown("Contiene todas las operaciones con desvío, sus descripciones y parámetros.")
-        excel_buf = export_excel_desvios(lib_items, ofi_items, cm_pre_items)
-        st.download_button(
-            label="⬇  DESCARGAR EXCEL DESVÍOS",
-            data=excel_buf,
-            file_name=f"DESVIOS_{mes.replace(' ','_')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        st.markdown("### 📊 Excel Dashboard Completo")
+        st.markdown("""
+        Incluye 5 hojas con toda la información del dashboard:
+        Resumen ejecutivo · Liberaciones · Oficializaciones · CM Presentados · CM Aprobados.
+        Cada operación con desvío incluye su **DESVÍO** y **PARÁMETRO**.
+        """)
+        if st.button("⚙️  GENERAR EXCEL", use_container_width=True, key="btn_excel"):
+            with st.spinner("Generando Excel..."):
+                try:
+                    excel_buf = export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes)
+                    st.download_button(
+                        label="⬇  DESCARGAR EXCEL DASHBOARD",
+                        data=excel_buf,
+                        file_name=f"DASHBOARD_KPI_{mes.replace(' ','_')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                    st.markdown('<div class="alert-success">✅ Excel generado — 5 hojas</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.markdown(f'<div class="alert-warn">❌ Error: {str(e)}</div>', unsafe_allow_html=True)
 
     with c2:
         st.markdown("### 📑 PowerPoint")
