@@ -1014,6 +1014,18 @@ if st.session_state.step == 1:
         color: #9AB0C4 !important;
         font-weight: 500 !important;
     }
+    /* Nombre del archivo ya subido — bien visible */
+    [data-testid="stFileUploaderFile"] {
+        background: #00C9A7 !important;
+        border-radius: 6px !important;
+        padding: 4px 10px !important;
+        margin-top: 4px !important;
+    }
+    [data-testid="stFileUploaderFile"] * {
+        color: #0A1628 !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stFileUploaderDeleteBtn"] button { color: #0A1628 !important; }
     </style>
     """, unsafe_allow_html=True)
 
