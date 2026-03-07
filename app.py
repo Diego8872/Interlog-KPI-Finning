@@ -144,9 +144,9 @@ FASA = 'FINNING ARGENTINA SOCIEDAD ANO'
 FSM  = 'FINNING SOLUCIONES MINERAS SA'
 
 LIMITES_LIB = {
-    'AVION':    {'VERDE': 24, 'NARANJA': 72, 'ROJO': 96},
-    'MARITIMO': {'VERDE': 72, 'NARANJA': 96, 'ROJO': 120},
-    'CAMION':   {'VERDE': 24, 'NARANJA': 48, 'ROJO': 72},
+    'AVION':    {'VERDE': 1, 'NARANJA': 3, 'ROJO': 4},
+    'MARITIMO': {'VERDE': 3, 'NARANJA': 4, 'ROJO': 5},
+    'CAMION':   {'VERDE': 1, 'NARANJA': 2, 'ROJO': 3},
 }
 
 COLORS = {
@@ -181,6 +181,20 @@ def parse_date(val):
             try: return datetime.strptime(val, fmt)
             except: pass
     return None
+
+def dias_habiles(d1, d2):
+    """Días hábiles entre d1 y d2, sin contar d1 (día de oficialización)"""
+    if not d1 or not d2: return None
+    d1 = d1.date() if hasattr(d1, 'date') else d1
+    d2 = d2.date() if hasattr(d2, 'date') else d2
+    if d2 <= d1: return 0
+    dias = 0
+    cur = d1 + timedelta(days=1)
+    while cur <= d2:
+        if cur.weekday() < 5:
+            dias += 1
+        cur += timedelta(days=1)
+    return dias
 
 def business_hours(d1, d2):
     if not d1 or not d2: return None
@@ -228,15 +242,15 @@ def procesar_liberadas(df):
         canal = str(r.get('Canal', '')).upper().strip()
         f_ofi = parse_date(r.get('Fecha Oficialización'))
         f_can = parse_date(r.get('Fecha Cancelada'))
-        hs    = business_hours(f_ofi, f_can)
+        dias   = dias_habiles(f_ofi, f_can)
         limite = LIMITES_LIB.get(via, {}).get(canal, 9999)
-        desvio = hs is not None and hs > limite
+        desvio = dias is not None and dias > limite
         results.append({
             'razon': razon, 'nombre': 'FASA' if razon == FASA else 'FSM',
             'ref': r.get('Referencia',''), 'carpeta': r.get('Carpeta',''),
             'via': via, 'canal': canal,
             'f_ofi': f_ofi, 'f_cancel': f_can,
-            'hs': round(hs, 1) if hs else None,
+            'hs': dias,
             'limite': limite, 'desvio': desvio,
             'desvio_desc': '', 'parametro': ''
         })
@@ -501,7 +515,7 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
                     else:
                         cell.fill = hfill(fill_c)
                         # Hs en rojo
-                        if headers[ci-1] in ['Hs Transcurridas']:
+                        if headers[ci-1] in ['Días Hábiles']:
                             cell.font = nr(10)
                         else:
                             cell.font = nw(10)
@@ -525,7 +539,7 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
     make_sheet(ws1,
         f"LIBERADAS {mes} — OPERACIONES CON DESVÍO",
         ["Razón Social","Referencia","Carpeta","Vía","Canal",
-         "F. Oficialización","F. Cancelada","Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+         "F. Oficialización","F. Cancelada","Días Hábiles","Límite (días)","DESVÍO ✏️","PARÁMETRO ✏️"],
         rows_lib, ACCENT, [28,16,12,12,10,18,22,18,12,35,25],
         edit_cols=[10,11], ref_col_idx=2
     )
@@ -583,7 +597,7 @@ def export_excel_desvios(lib_items, ofi_items, cm_pre_items):
             df = pd.DataFrame([{
                 'Razón Social': i['nombre'], 'Referencia': i['ref'],
                 'Vía': i['via'], 'Canal': i['canal'],
-                'Hs Transcurridas': i['hs'], 'Límite (hs)': i['limite'],
+                'Días Hábiles': i['hs'], 'Límite (días)': i['limite'],
                 'DESVÍO': i.get('desvio_desc',''), 'PARÁMETRO': i.get('parametro','')
             } for i in lib_desvios])
             df.to_excel(writer, sheet_name='LIBERADAS - DESVÍOS', index=False)
@@ -593,7 +607,7 @@ def export_excel_desvios(lib_items, ofi_items, cm_pre_items):
         if ofi_desvios:
             df = pd.DataFrame([{
                 'Razón Social': i['nombre'], 'Referencia': i['ref'],
-                'Vía': i['via'], 'Hs Transcurridas': i['hs'], 'Límite (hs)': i['limite'],
+                'Vía': i['via'], 'Días Hábiles': i['hs'], 'Límite (días)': i['limite'],
                 'DESVÍO': i.get('desvio_desc',''), 'PARÁMETRO': i.get('parametro','')
             } for i in ofi_desvios])
             df.to_excel(writer, sheet_name='OFICIALIZADOS - DESVÍOS', index=False)
