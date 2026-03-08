@@ -196,24 +196,9 @@ def dias_habiles(d1, d2):
         cur += timedelta(days=1)
     return dias
 
-def business_hours(d1, d2):
-    if not d1 or not d2: return None
-    if d2 < d1: d1, d2 = d2, d1
-    total = 0
-    current = d1
-    while current < d2:
-        if current.weekday() < 5:
-            start = current.replace(hour=9, minute=0, second=0, microsecond=0)
-            end   = current.replace(hour=18, minute=0, second=0, microsecond=0)
-            if current < start: current = start
-            day_end = min(end, d2)
-            if current < day_end:
-                total += (day_end - current).total_seconds() / 3600
-        current = (current + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
-    return total
-
 def limite_ofi(razon, via):
-    return 48 if razon == FSM and via == 'MARITIMO' else 24
+    # 2 días hábiles para FSM Marítimo, 1 día hábil para el resto
+    return 2 if razon == FSM and via == 'MARITIMO' else 1
 
 def color_kpi(pct):
     if pct >= 95: return COLORS['accent']
@@ -263,15 +248,15 @@ def procesar_oficializados(df):
         via   = str(r.get('Via', '')).upper().strip()
         f_ofi = parse_date(r.get('Fecha Oficialización'))
         f_ult = parse_date(r.get('Ultimo Evento'))
-        hs    = business_hours(f_ofi, f_ult)
+        dias  = dias_habiles(f_ofi, f_ult)
         limite = limite_ofi(razon, via)
-        desvio = hs is not None and hs > limite
+        desvio = dias is not None and dias > limite
         results.append({
             'razon': razon, 'nombre': 'FASA' if razon == FASA else 'FSM',
             'ref': r.get('Referencia',''), 'carpeta': r.get('Carpeta',''),
             'via': via,
             'f_ofi': f_ofi, 'f_ult': f_ult,
-            'hs': round(hs, 1) if hs else None,
+            'hs': dias,
             'limite': limite, 'desvio': desvio,
             'desvio_desc': '', 'parametro': ''
         })
@@ -282,12 +267,12 @@ def procesar_cm_presentados(df):
     for _, r in df.iterrows():
         f_tad = parse_date(r.get('TAD SUBIDO'))
         f_ult = parse_date(r.get('Ult evento'))
-        hs    = business_hours(f_tad, f_ult)
-        desvio = hs is not None and hs > 48
+        dias  = dias_habiles(f_tad, f_ult)
+        desvio = dias is not None and dias > 2
         results.append({
             'carpeta': r.get('CARPETA',''), 'exp': r.get('Expediente',''),
             'f_tad': f_tad, 'f_ult': f_ult,
-            'hs': round(hs, 1) if hs else None,
+            'hs': dias,
             'desvio': desvio, 'desvio_desc': '', 'parametro': ''
         })
     return results
@@ -399,13 +384,13 @@ def chart_scatter_tiempo(items, limite, title=''):
     colors = [COLORS['red'] if h > limite else COLORS['accent'] for h in hs_vals]
     fig = go.Figure()
     fig.add_hline(y=limite, line_dash='dash', line_color=COLORS['orange'],
-                  annotation_text=f'Límite {limite}hs', annotation_position='top right',
+                  annotation_text=f'Límite {limite} días', annotation_position='top right',
                   annotation_font=dict(color=COLORS['orange'], size=11))
     fig.add_trace(go.Scatter(
         x=list(range(len(hs_vals))), y=hs_vals,
         mode='markers',
         marker=dict(color=colors, size=10, line=dict(color='white', width=1.5)),
-        hovertemplate='Op %{x}: %{y:.1f} hs<extra></extra>'
+        hovertemplate='Op %{x}: %{y} días<extra></extra>'
     ))
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -415,7 +400,7 @@ def chart_scatter_tiempo(items, limite, title=''):
         height=220,
     )
     fig.update_xaxes(showticklabels=False, title='Operaciones')
-    fig.update_yaxes(title='Horas hábiles')
+    fig.update_yaxes(title='Días hábiles')
     return fig
 
 def chart_stacked_canales(nombre, items):
@@ -474,27 +459,23 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
 
     def make_sheet(ws, title_text, headers, rows_data, header_color, col_widths,
                    edit_cols, ref_col_idx=None):
-        # Título
         ws.merge_cells(f"A1:{get_column_letter(len(headers))}1")
         ws["A1"] = title_text
         ws["A1"].font = bw(13); ws["A1"].fill = hfill(DARK_BG)
         ws["A1"].alignment = cen(); ws.row_dimensions[1].height = 30
 
-        # Subtítulo
         ws.merge_cells(f"A2:{get_column_letter(len(headers))}2")
         ws["A2"] = "⚠️  Completar columnas DESVÍO y PARÁMETRO — Si Parámetro ≠ INTERLOG la operación se considera IN"
         ws["A2"].font = Font(color=GOLD, size=9, name="Calibri")
         ws["A2"].fill = hfill(MID_BG); ws["A2"].alignment = cen()
         ws.row_dimensions[2].height = 20
 
-        # Headers
         for ci, h in enumerate(headers, 1):
             cell = ws.cell(3, ci, h)
             cell.font = bw(10); cell.fill = hfill(header_color)
             cell.alignment = cen(); cell.border = brd()
         ws.row_dimensions[3].height = 25
 
-        # Datos
         if not rows_data:
             ws.merge_cells(f"A4:{get_column_letter(len(headers))}4")
             ws["A4"] = "✅  Sin desvíos detectados — KPI 100%"
@@ -514,14 +495,12 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
                         cell.fill = hfill(fill_c); cell.font = bw(10)
                     else:
                         cell.fill = hfill(fill_c)
-                        # Hs en rojo
                         if headers[ci-1] in ['Días Hábiles']:
                             cell.font = nr(10)
                         else:
                             cell.font = nw(10)
                 ws.row_dimensions[ri].height = 20
 
-        # Anchos
         for i, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
         ws.freeze_panes = "A4"
@@ -533,7 +512,7 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
         'FASA' if i['razon'] == FASA else 'FSM',
         i['ref'], str(i['carpeta']), i['via'], i['canal'],
         i['f_ofi'].strftime('%d/%m/%Y') if i['f_ofi'] else '',
-        i['f_cancel'].strftime('%d/%m/%Y %H:%M') if i['f_cancel'] else '',
+        i['f_cancel'].strftime('%d/%m/%Y') if i['f_cancel'] else '',
         i['hs'], i['limite'], '', ''
     ] for i in lib_desvios]
     make_sheet(ws1,
@@ -551,13 +530,13 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
         'FASA' if i['razon'] == FASA else 'FSM',
         i['ref'], str(i['carpeta']), i['via'],
         i['f_ofi'].strftime('%d/%m/%Y') if i['f_ofi'] else '',
-        i['f_ult'].strftime('%d/%m/%Y %H:%M') if i['f_ult'] else '',
+        i['f_ult'].strftime('%d/%m/%Y') if i['f_ult'] else '',
         i['hs'], i['limite'], '', ''
     ] for i in ofi_desvios]
     make_sheet(ws2,
         f"OFICIALIZADOS {mes} — OPERACIONES CON DESVÍO",
         ["Razón Social","Referencia","Carpeta","Vía",
-         "F. Oficialización","Último Evento","Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+         "F. Oficialización","Último Evento","Días Hábiles","Límite (días)","DESVÍO ✏️","PARÁMETRO ✏️"],
         rows_ofi, "005F52", [28,16,12,12,18,22,18,12,35,25],
         edit_cols=[9,10], ref_col_idx=2
     )
@@ -569,12 +548,12 @@ def generar_excel_desvios(lib_items, ofi_items, cm_pre_items, mes='MES'):
         str(i['carpeta']), str(i['exp']),
         i['f_tad'].strftime('%d/%m/%Y') if i['f_tad'] else '',
         i['f_ult'].strftime('%d/%m/%Y') if i['f_ult'] else '',
-        i['hs'], 48, '', ''
+        i['hs'], 2, '', ''
     ] for i in cm_desvios]
     make_sheet(ws3,
         f"CM PRESENTADOS {mes} — OPERACIONES CON DESVÍO",
         ["Carpeta","Expediente","TAD Subido","Último Evento",
-         "Hs Transcurridas","Límite (hs)","DESVÍO ✏️","PARÁMETRO ✏️"],
+         "Días Hábiles","Límite (días)","DESVÍO ✏️","PARÁMETRO ✏️"],
         rows_cm, PURPLE, [12,28,18,18,18,12,35,25],
         edit_cols=[7,8], ref_col_idx=2
     )
@@ -695,7 +674,6 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
                 limite = ops[0]['limite']
                 fill_c = CARD if ri % 2 == 1 else MID
 
-                # Fila resumen del grupo
                 ws2.cell(ri, 1, nombre).font = fw(10, True)
                 ws2.cell(ri, 1).fill = hf(fill_c); ws2.cell(ri, 1).border = brd(); ws2.cell(ri, 1).alignment = cen()
                 for ci, val in enumerate([via, canal, len(ops), in_c, out_c, f"{pct:.1f}%", avg_dias, limite, '', '', ''], 2):
@@ -709,7 +687,6 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
                 ws2.row_dimensions[ri].height = 20
                 ri += 1
 
-                # Filas detalle — solo desvíos
                 for op in [o for o in ops if o['desvio']]:
                     fill_d = '1A0A0A'
                     for ci, val in enumerate(['', '', '', '', '', '', '', '', '',
@@ -732,7 +709,7 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
     ws3.sheet_view.showGridLines = False
     write_title(ws3, f"OFICIALIZACIONES · DETALLE POR SOCIEDAD Y VÍA · {mes}", 10)
     headers_ofi = ["Razón Social","Vía","Total Ops","IN","OUT","KPI %",
-                   "Prom Hs","Límite Hs","DESVÍO","PARÁMETRO"]
+                   "Prom Días","Límite Días","DESVÍO","PARÁMETRO"]
     write_headers(ws3, headers_ofi, 2, '005F52')
 
     ri = 3
@@ -778,7 +755,7 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
     ws4.sheet_view.showGridLines = False
     write_title(ws4, f"CERTIFICADOS MINEROS PRESENTADOS · {mes}", 8)
     headers_cm = ["Carpeta","Expediente","TAD Subido","Último Evento",
-                  "Hs Transcurridas","Límite (hs)","DESVÍO","PARÁMETRO"]
+                  "Días Hábiles","Límite (días)","DESVÍO","PARÁMETRO"]
     write_headers(ws4, headers_cm, 2, '5B21B6')
 
     for ri, i in enumerate(cm_pre_items, 3):
@@ -787,7 +764,7 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
             str(i.get('carpeta','')), str(i['exp']),
             i['f_tad'].strftime('%d/%m/%Y') if i.get('f_tad') else '',
             i['f_ult'].strftime('%d/%m/%Y') if i.get('f_ult') else '',
-            i['hs'], 48,
+            i['hs'], 2,
             i.get('desvio_desc','') if i['desvio'] else '',
             i.get('parametro','') if i['desvio'] else '',
         ]
@@ -837,7 +814,6 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
 # SECCIÓN KPI
 # ─────────────────────────────────────────────
 def render_via_section(nombre, via, lib_items, ofi_items, con_param, key_prefix):
-    """Renderiza una sección de Oficialización + Liberación para una sociedad + vía"""
     lib_r = [i for i in lib_items if i['nombre'] == nombre and i['via'] == via]
     ofi_r = [i for i in ofi_items if i['nombre'] == nombre and i['via'] == via]
 
@@ -856,7 +832,6 @@ def render_via_section(nombre, via, lib_items, ofi_items, con_param, key_prefix)
 
     col1, col2 = st.columns(2)
 
-    # ── OFICIALIZACIÓN ──
     with col1:
         st.markdown('<div style="color:#9AB0C4; font-size:0.8rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:0.3rem;">OFICIALIZACIÓN</div>', unsafe_allow_html=True)
         if ofi_r:
@@ -877,7 +852,6 @@ def render_via_section(nombre, via, lib_items, ofi_items, con_param, key_prefix)
         else:
             st.markdown('<div class="alert-info">Sin oficializaciones para esta vía.</div>', unsafe_allow_html=True)
 
-    # ── LIBERACIÓN ──
     with col2:
         st.markdown('<div style="color:#9AB0C4; font-size:0.8rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:0.3rem;">LIBERACIÓN</div>', unsafe_allow_html=True)
         if lib_r:
@@ -896,7 +870,6 @@ def render_via_section(nombre, via, lib_items, ofi_items, con_param, key_prefix)
                 st.markdown(metric_html(str(in_lib), "IN", None, 'accent'), unsafe_allow_html=True)
                 st.markdown(metric_html(str(out_lib), "OUT", None, 'red' if out_lib else 'accent'), unsafe_allow_html=True)
 
-            # Canal Verde Avión
             if via == 'AVION':
                 va = [i for i in lib_r if i['canal'] == 'VERDE']
                 if va:
@@ -927,7 +900,6 @@ def render_kpi_section(nombre, lib_items, ofi_items, con_param=False):
 # MAIN APP
 # ─────────────────────────────────────────────
 
-# Header
 st.markdown("""
 <div style="background: linear-gradient(135deg, #0F2040 0%, #132236 100%);
      border-bottom: 1px solid rgba(0,201,167,0.2);
@@ -990,7 +962,6 @@ if st.session_state.step == 1:
     </div><br>
     """, unsafe_allow_html=True)
 
-    # Estilos para los uploaders — mayor contraste
     st.markdown("""
     <style>
     [data-testid="stFileUploader"] {
@@ -1014,7 +985,6 @@ if st.session_state.step == 1:
         color: #9AB0C4 !important;
         font-weight: 500 !important;
     }
-    /* Nombre del archivo ya subido — bien visible */
     [data-testid="stFileUploaderFile"] {
         background: #00C9A7 !important;
         border-radius: 6px !important;
@@ -1081,13 +1051,9 @@ elif st.session_state.step == 2:
             st.session_state.step = 3
             st.rerun()
     else:
-        # ── SUB-ESTADO: ¿ya descargó o está subiendo? ──
         if 'desvio_sub_step' not in st.session_state:
             st.session_state.desvio_sub_step = 'descargar'
 
-        # ──────────────────────────────────────────
-        # SUB-STEP A: DESCARGAR EXCEL
-        # ──────────────────────────────────────────
         if st.session_state.desvio_sub_step == 'descargar':
             st.markdown(f"""
             <div class="alert-warn">
@@ -1097,7 +1063,6 @@ elif st.session_state.step == 2:
             </div><br>
             """, unsafe_allow_html=True)
 
-            # Generar Excel estilizado
             excel_buf = generar_excel_desvios(lib_items, ofi_items, cm_pre_items,
                                                st.session_state.mes or 'MES')
 
@@ -1120,9 +1085,6 @@ elif st.session_state.step == 2:
                     st.session_state.desvio_sub_step = 'descargar'
                     st.rerun()
 
-        # ──────────────────────────────────────────
-        # SUB-STEP B: SUBIR EXCEL COMPLETADO
-        # ──────────────────────────────────────────
         elif st.session_state.desvio_sub_step == 'subir':
             st.markdown("""
             <div class="alert-info">
@@ -1141,10 +1103,8 @@ elif st.session_state.step == 2:
                     wb_dev = pd.ExcelFile(f_desvios)
                     errores = []
 
-                    # ── Leer LIBERADAS ──
                     if 'LIBERADAS - DESVÍOS' in wb_dev.sheet_names:
                         df_dev_lib = wb_dev.parse('LIBERADAS - DESVÍOS', skiprows=2)
-                        # Normalizar columnas
                         df_dev_lib.columns = [str(c).strip() for c in df_dev_lib.columns]
                         col_desv  = next((c for c in df_dev_lib.columns if 'DESVÍO' in c or 'DESVIO' in c.upper()), None)
                         col_param = next((c for c in df_dev_lib.columns if 'PARÁMETRO' in c or 'PARAMETRO' in c.upper()), None)
@@ -1164,7 +1124,6 @@ elif st.session_state.step == 2:
                                     item['desvio_desc'] = ref_map[item['ref']]['desvio_desc']
                                     item['parametro']   = ref_map[item['ref']]['parametro']
 
-                    # ── Leer OFICIALIZADOS ──
                     if 'OFICIALIZADOS - DESVÍOS' in wb_dev.sheet_names:
                         df_dev_ofi = wb_dev.parse('OFICIALIZADOS - DESVÍOS', skiprows=2)
                         df_dev_ofi.columns = [str(c).strip() for c in df_dev_ofi.columns]
@@ -1186,7 +1145,6 @@ elif st.session_state.step == 2:
                                     item['desvio_desc'] = ref_map[item['ref']]['desvio_desc']
                                     item['parametro']   = ref_map[item['ref']]['parametro']
 
-                    # ── Leer CM PRESENTADOS ──
                     if 'CM PRESENTADOS - DESVÍOS' in wb_dev.sheet_names:
                         df_dev_cm = wb_dev.parse('CM PRESENTADOS - DESVÍOS', skiprows=2)
                         df_dev_cm.columns = [str(c).strip() for c in df_dev_cm.columns]
@@ -1208,7 +1166,6 @@ elif st.session_state.step == 2:
                                     item['desvio_desc'] = exp_map[str(item['exp']).strip()]['desvio_desc']
                                     item['parametro']   = exp_map[str(item['exp']).strip()]['parametro']
 
-                    # ── Verificar completitud ──
                     pendientes_lib = [i for i in lib_items  if i['desvio'] and not i.get('parametro','').strip()]
                     pendientes_ofi = [i for i in ofi_items  if i['desvio'] and not i.get('parametro','').strip()]
                     pendientes_cm  = [i for i in cm_pre_items if i['desvio'] and not i.get('parametro','').strip()]
@@ -1218,23 +1175,21 @@ elif st.session_state.step == 2:
                         st.markdown('<div class="alert-success">✅ Todos los desvíos fueron completados correctamente.</div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        # Preview tabla
                         todos = (
                             [{'Proceso':'LIBERADAS', 'Ref': i['ref'], 'Razón':i['nombre'],
-                              'Vía':i['via'], 'Canal':i.get('canal',''), 'Hs':i['hs'],
+                              'Vía':i['via'], 'Canal':i.get('canal',''), 'Días':i['hs'],
                               'Límite':i['limite'], 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
                              for i in lib_items if i['desvio']] +
                             [{'Proceso':'OFICIALIZADOS', 'Ref': i['ref'], 'Razón':i['nombre'],
-                              'Vía':i['via'], 'Canal':'', 'Hs':i['hs'],
+                              'Vía':i['via'], 'Canal':'', 'Días':i['hs'],
                               'Límite':i['limite'], 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
                              for i in ofi_items if i['desvio']] +
                             [{'Proceso':'CM PRES.', 'Ref': i['exp'], 'Razón':'',
-                              'Vía':'', 'Canal':'', 'Hs':i['hs'],
-                              'Límite':48, 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
+                              'Vía':'', 'Canal':'', 'Días':i['hs'],
+                              'Límite':2, 'Desvío':i['desvio_desc'], 'Parámetro':i['parametro']}
                              for i in cm_pre_items if i['desvio']]
                         )
                         df_prev = pd.DataFrame(todos)
-                        # Color por parámetro
                         def color_param(val):
                             if str(val).upper() == 'INTERLOG':
                                 return 'background-color: rgba(255,61,94,0.2); color: #FF3D5E; font-weight:bold'
@@ -1291,7 +1246,6 @@ elif st.session_state.step == 3:
 
     st.markdown(f'<div class="section-header">📊 DASHBOARD KPI · {mes}</div>', unsafe_allow_html=True)
 
-    # ── RESUMEN EJECUTIVO ──
     pct_lib_fasa, _, _ = calcular_kpi([i for i in lib_items if i['nombre'] == 'FASA'], True)
     pct_lib_fsm,  _, _ = calcular_kpi([i for i in lib_items if i['nombre'] == 'FSM'],  True)
     pct_ofi_fasa, _, _ = calcular_kpi([i for i in ofi_items if i['nombre'] == 'FASA'], True)
@@ -1299,7 +1253,6 @@ elif st.session_state.step == 3:
     pct_cm, _, _       = calcular_kpi(cm_pre_items, True)
 
     def via_breakdown(items, nombre):
-        """Genera HTML con desglose por vía para la card de liberación"""
         lines = []
         for via, emoji in [('AVION','✈️'), ('CAMION','🚛'), ('MARITIMO','🚢')]:
             sub = [i for i in items if i['nombre'] == nombre and i['via'] == via]
@@ -1312,7 +1265,6 @@ elif st.session_state.step == 3:
 
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    # LIB FASA con desglose
     col_lib_fasa = '#00C9A7' if pct_lib_fasa >= 95 else ('#FF8C42' if pct_lib_fasa >= 80 else '#FF3D5E')
     c1.markdown(f"""
     <div class="metric-card">
@@ -1321,7 +1273,6 @@ elif st.session_state.step == 3:
         <div style="margin-top:0.4rem; line-height:1.8;">{via_breakdown(lib_items,'FASA')}</div>
     </div>""", unsafe_allow_html=True)
 
-    # LIB FSM con desglose
     col_lib_fsm = '#00C9A7' if pct_lib_fsm >= 95 else ('#FF8C42' if pct_lib_fsm >= 80 else '#FF3D5E')
     c2.markdown(f"""
     <div class="metric-card">
@@ -1330,7 +1281,6 @@ elif st.session_state.step == 3:
         <div style="margin-top:0.4rem; line-height:1.8;">{via_breakdown(lib_items,'FSM')}</div>
     </div>""", unsafe_allow_html=True)
 
-    # OFI FASA, OFI FSM, CM — igual que antes
     for col, val, lbl, sub, pct in [
         (c3, f"{pct_ofi_fasa:.0f}%", "OFI FASA", "Oficialización", pct_ofi_fasa),
         (c4, f"{pct_ofi_fsm:.0f}%",  "OFI FSM",  "Oficialización", pct_ofi_fsm),
@@ -1341,7 +1291,6 @@ elif st.session_state.step == 3:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── TABS ──
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📦 FASA", "🏔️ FSM", "📊 DETALLE POR VÍA", "📊 DISTRIBUCIÓN DE CANALES", "📜 CERTIFICADOS MINEROS"])
 
     with tab1:
@@ -1425,7 +1374,6 @@ elif st.session_state.step == 3:
     with tab4:
         st.markdown('<div class="section-header">DISTRIBUCIÓN DE CANALES · POR VÍA Y SOCIEDAD</div>', unsafe_allow_html=True)
 
-        # General — todas las razones sociales
         st.markdown("""<div style="color:#FFD060; font-family:'Barlow Condensed',sans-serif;
             font-size:1rem; font-weight:700; letter-spacing:1px; margin:0.5rem 0;">GENERAL</div>""", unsafe_allow_html=True)
         vias_orden2 = [('AVION','✈️'), ('CAMION','🚛'), ('MARITIMO','🚢')]
@@ -1446,7 +1394,6 @@ elif st.session_state.step == 3:
                 showlegend=False)
             col.plotly_chart(fig, use_container_width=True, key=f"pie_gen_{via.lower()}")
 
-        # Por sociedad
         for razon in ['FASA', 'FSM']:
             accent_color = '#00C9A7' if razon == 'FASA' else '#FF8C42'
             st.markdown(f"""<div style="color:{accent_color}; font-family:'Barlow Condensed',sans-serif;
@@ -1478,7 +1425,6 @@ elif st.session_state.step == 3:
         c3.markdown(metric_html(str(in_cm), "IN", "Dentro del rango", 'accent'), unsafe_allow_html=True)
         c4.markdown(metric_html(str(out_cm), "OUT", "Fuera del rango", 'red' if out_cm else 'accent'), unsafe_allow_html=True)
 
-        # Desvíos en CM Presentados
         cm_dev = [i for i in cm_pre_items if i['desvio']]
         if cm_dev:
             st.markdown('<div class="section-header" style="border-color:#FF3D5E; margin-top:1rem;">DESVÍOS EN CM PRESENTADOS</div>', unsafe_allow_html=True)
@@ -1486,12 +1432,11 @@ elif st.session_state.step == 3:
             for i in cm_dev:
                 param = i.get('parametro', '')
                 estado = '⛔ OUT' if param.upper() == 'INTERLOG' else ('✅ IN' if param else '⏳ Pendiente')
-                filas_cm.append({'Expediente': i['exp'], 'Hs Transcurridas': i['hs'],
-                                 'Límite (hs)': 48, 'Desvío': i.get('desvio_desc',''),
+                filas_cm.append({'Expediente': i['exp'], 'Días Hábiles': i['hs'],
+                                 'Límite (días)': 2, 'Desvío': i.get('desvio_desc',''),
                                  'Parámetro': param, 'Estado': estado})
             st.dataframe(pd.DataFrame(filas_cm), use_container_width=True, hide_index=True)
 
-        # CM Aprobados — donut por rango
         if cm_apr_items:
             st.markdown('<div class="section-header" style="margin-top:1rem;">CM APROBADOS · TIEMPOS DE APROBACIÓN</div>', unsafe_allow_html=True)
             rangos = Counter(i['rango'] for i in cm_apr_items if i['rango'])
@@ -1603,8 +1548,3 @@ elif st.session_state.step == 4:
                     st.markdown('<div class="alert-success">✅ PowerPoint generado correctamente — 9 slides</div>', unsafe_allow_html=True)
                 except Exception as e:
                     st.markdown(f'<div class="alert-warn">❌ Error al generar PowerPoint: {str(e)}</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("◀  VOLVER AL DASHBOARD"):
-        st.session_state.step = 3
-        st.rerun()
