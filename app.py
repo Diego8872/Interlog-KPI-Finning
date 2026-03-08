@@ -1589,7 +1589,7 @@ elif st.session_state.step == 4:
             with st.spinner("Generando PowerPoint... (~20 segundos)"):
                 try:
                     from ppt_generator import generar_ppt
-                    ppt_buf = generar_ppt(
+                    ppt_buf, fname = generar_ppt(
                         lib_items, ofi_items, cm_pre_items, cm_apr_items,
                         mes=st.session_state.mes or 'MES'
                     )
