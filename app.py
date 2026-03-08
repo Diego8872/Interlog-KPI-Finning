@@ -640,7 +640,7 @@ def export_dashboard_excel(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes
         filas_res.append([proc, nombre, len(sub), in_c, out_c, f"{pct:.1f}%", "95%"])
     sub_cm = cm_pre_items
     pct_cm, in_cm, out_cm = calcular_kpi(sub_cm, True)
-    filas_res.append(["CM PRESENTADOS", "FASA+FSM", len(sub_cm), in_cm, out_cm, f"{pct_cm:.1f}%", "95%"])
+    filas_res.append(["CM PRESENTADOS", "FSM", len(sub_cm), in_cm, out_cm, f"{pct_cm:.1f}%", "95%"])
 
     for ri, vals in enumerate(filas_res, 3):
         fill_c = CARD if ri % 2 == 1 else MID
@@ -1503,6 +1503,11 @@ elif st.session_state.step == 4:
     </div><br>
     """, unsafe_allow_html=True)
 
+    if st.button("◀  VOLVER AL DASHBOARD"):
+        st.session_state.step = 3
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
