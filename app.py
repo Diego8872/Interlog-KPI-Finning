@@ -267,7 +267,7 @@ def procesar_cm_presentados(df):
     for _, r in df.iterrows():
         f_tad = parse_date(r.get('TAD SUBIDO'))
         f_ult = parse_date(r.get('Ult evento'))
-        dias  = dias_habiles(f_tad, f_ult)
+        dias  = dias_habiles(f_ult, f_tad)
         desvio = dias is not None and dias > 2
         results.append({
             'carpeta': r.get('CARPETA',''), 'exp': r.get('Expediente',''),
