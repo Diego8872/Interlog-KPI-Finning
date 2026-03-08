@@ -105,11 +105,9 @@ def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
     color = kpi_color(pct)
     w_card = 2.80
 
-    # Fondo + acento
     rect(slide, x, 1.05, w_card, 5.70, BG_CARD)
     rect(slide, x, 1.05, 0.06, 5.70, TEAL)
 
-    # Columna izquierda
     txt(slide, title,    x+0.15, 1.10, 2.5, 0.35, 14, bold=True,  color=DARK)
     txt(slide, subtitle, x+0.15, 1.44, 2.5, 0.25,  8, color=GRAY)
     rect(slide, x+0.20, 1.95, 2.40, 0.02, LGRAY)
@@ -119,7 +117,6 @@ def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
     txt(slide, limite,   x+0.15, 2.90, 2.5, 0.30, 14, bold=True, color=DARK)
     rect(slide, x+0.20, 3.60, 2.40, 0.02, LGRAY)
 
-    # Stats
     for i, (v, lbl, col) in enumerate([(str(total), 'TOTAL', DARK),
                                          (str(inn),   'IN',    TEAL),
                                          (str(out),   'OUT',   ROJO if out > 0 else TEAL)]):
@@ -127,7 +124,6 @@ def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
         txt(slide, v,   sx, 3.70, 0.75, 0.42, 20, bold=True, color=col)
         txt(slide, lbl, sx, 4.12, 0.75, 0.25,  9, color=GRAY)
 
-    # KPI % grande
     kx = x + w_card + 0.35
     kw = 2.90
     txt(slide, fmt_pct(pct), kx, 1.80, kw, 1.60,
@@ -135,7 +131,6 @@ def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
     txt(slide, 'KPI IN', kx, 3.40, kw, 0.28,
         16, bold=True, color=GRAY, align=PP_ALIGN.CENTER)
 
-    # Barra progreso
     rect(slide, kx+0.1, 4.05, 2.90, 0.28, BG_CARD)
     fw = max(0.05, 2.90 * pct / 100)
     rect(slide, kx+0.1, 4.05, fw, 0.28, color)
@@ -151,7 +146,6 @@ def add_liberacion_slide(prs, bg_bytes, lib_items, nombre, blank_layout):
     sub = [i for i in lib_items if i['nombre'] == nombre]
     pct_tot, in_tot, out_tot = calcular_kpi(sub, True)
 
-    # Sección RESUMEN
     txt(s, 'RESUMEN', 0.45, 0.98, 3.0, 0.24, 9, bold=True, color=TEAL)
 
     boxes = [(str(len(sub)), 'TOTAL OPS', DARK),
@@ -166,14 +160,13 @@ def add_liberacion_slide(prs, bg_bytes, lib_items, nombre, blank_layout):
         txt(s, lbl, bx, 1.78, 1.50, 0.25,  8, bold=True, color=GRAY,
             align=PP_ALIGN.CENTER)
 
-    # Sección DETALLE POR VÍA
     txt(s, 'DETALLE POR VÍA', 0.45, 2.25, 5.0, 0.28, 9, bold=True, color=TEAL)
 
     via_labels  = {'AVION': 'Aéreo', 'CAMION': 'Camión', 'MARITIMO': 'Marítimo'}
     canal_colores = {'VERDE': VERDE, 'NARANJA': NARANJA, 'ROJO': ROJO}
 
     row_y = 2.58
-    row_h = 1.30  # reducido para que quepan 3 vías
+    row_h = 1.30
     row_gap = 0.10
 
     for via in ['AVION', 'CAMION', 'MARITIMO']:
@@ -187,17 +180,14 @@ def add_liberacion_slide(prs, bg_bytes, lib_items, nombre, blank_layout):
 
         rect(s, 0.45, row_y, 12.40, row_h, BG_CARD)
 
-        # Label vía
         txt(s, via_labels[via],
             0.55, row_y+0.06, 1.80, 0.28, 10, bold=True, color=DARK)
         txt(s, f"Total: {total_v} · {in_v} IN · {out_v} OUT",
             0.55, row_y+0.34, 2.00, 0.20, 7.5, color=GRAY)
 
-        # KPI %
         txt(s, fmt_pct(pct_v), 2.55, row_y+0.06, 1.00, 0.50,
             18, bold=True, color=color_v, align=PP_ALIGN.CENTER, valign='middle')
 
-        # 3 barras horizontales: VERDE, NARANJA, ROJO
         bar_x0 = 3.65
         bw_each = 2.90
         bgap    = 0.22
@@ -209,25 +199,20 @@ def add_liberacion_slide(prs, bg_bytes, lib_items, nombre, blank_layout):
             cc  = canal_colores[canal]
             cx  = bar_x0 + ci * (bw_each + bgap)
 
-            # Label canal
             txt(s, canal, cx, row_y+0.06, bw_each, 0.20,
                 7.5, bold=True, color=cc)
 
-            # Barra fondo
             rect(s, cx, row_y+0.30, bw_each, 0.28, LGRAY)
 
-            # Barra fill
             if cnt > 0:
                 fw = max(0.05, bw_each * pct_c / 100)
                 rect(s, cx, row_y+0.30, fw, 0.28, cc)
 
-            # Valor / pct
             val_str = f"{cnt}/{total_v}   {pct_c}%" if cnt > 0 else "–"
             txt(s, val_str, cx, row_y+0.62, bw_each, 0.20, 8, color=GRAY)
 
         row_y += row_h + row_gap
 
-    # Target — al lado de los boxes de resumen, tamaño 30 bold
     txt(s, 'Target: 95%', 7.20, 1.22, 5.00, 0.88,
         30, bold=True, color=DARK, align=PP_ALIGN.CENTER, valign='middle')
 
@@ -270,7 +255,6 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
     r15     = rangos.get('+15', 0)
     def pct_r(v): return round(v / tot_apr * 100) if tot_apr else 0
 
-    # Cargar template para extraer fondos
     candidates = [TEMPLATE_PATH,
                   '/mnt/user-data/uploads/KPI_INTERLOG_Diciembre_2025__21_.pptx']
     tfile = next((p for p in candidates if os.path.exists(p)), None)
@@ -336,18 +320,23 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
     txt(s2, 'DESVÍOS IMPUTABLES A INTERLOG', 0.45, 3.58, 8.0, 0.28,
         9, bold=True, color=TEAL)
 
+    # ── 5 boxes: Lib FASA, Lib FSM, Ofi FASA, Ofi FSM, CM Presentados ──
+    cm_imp = sum(1 for i in cm_pre_items if i['desvio'] and
+                 str(i.get('parametro', '')).upper() == 'INTERLOG')
     devs = [('FASA · Liberación',     *dev_imp(lib_items, 'FASA')),
             ('FSM · Liberación',      *dev_imp(lib_items, 'FSM')),
             ('FASA · Oficialización', *dev_imp(ofi_items, 'FASA')),
-            ('FSM · Oficialización',  *dev_imp(ofi_items, 'FSM'))]
-    dxs = [0.45, 3.25, 6.05, 8.85]
-    dw  = 2.60
+            ('FSM · Oficialización',  *dev_imp(ofi_items, 'FSM')),
+            ('CM Presentados',        cm_imp, len(cm_pre_items))]
+    dxs = [0.45, 2.90, 5.35, 7.80, 10.25]
+    dw  = 2.30
     for (lbl, dout, dtot), dx in zip(devs, dxs):
         rect(s2, dx, 3.85, dw, 1.10, WHITE)
         txt(s2, lbl, dx+0.10, 3.90, dw-0.15, 0.25, 8, color=GRAY)
         txt(s2, f"{dout} OUT", dx+0.10, 4.16, dw*0.60, 0.44,
             18, bold=True, color=ROJO if dout > 0 else TEAL)
-        txt(s2, f"de {dtot} ops", dx+0.10, 4.62, dw-0.15, 0.24, 9, color=GRAY)
+        unit = 'exp' if lbl == 'CM Presentados' else 'ops'
+        txt(s2, f"de {dtot} {unit}", dx+0.10, 4.62, dw-0.15, 0.24, 9, color=GRAY)
 
     # ── SLIDE 3: FASA · LIBERACIÓN ──────────────────────────────────────────
     add_liberacion_slide(prs, bg_contenido, lib_items, 'FASA', blank)
@@ -360,9 +349,9 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
     add_bg(s5, bg_contenido)
     slide_header(s5, 'OFICIALIZACIÓN · FASA + FSM')
     add_kpi_card(s5, 0.45,  ofi_fasa_tot, ofi_fasa_in, ofi_fasa_out, ofi_fasa_pct,
-                 'FASA', 'OFICIALIZACIÓN', '24 hs hábiles')
+                 'FASA', 'OFICIALIZACIÓN', '1 día hábil')
     add_kpi_card(s5, 6.80,  ofi_fsm_tot,  ofi_fsm_in,  ofi_fsm_out,  ofi_fsm_pct,
-                 'FSM',  'OFICIALIZACIÓN', '24 hs (48 hs Marítimo)')
+                 'FSM',  'OFICIALIZACIÓN', '1 día hábil (2 días Marítimo)')
 
     # ── SLIDE 6: CANAL VERDE · VÍA AÉREA ────────────────────────────────────
     s6 = prs.slides.add_slide(blank)
@@ -421,7 +410,6 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
                     9, bold=True, color=WHITE, align=PP_ALIGN.CENTER, valign='middle')
             cx += sw
 
-    # Leyenda — encima del footer
     leg_y = 6.50
     for li, (lbl, col) in enumerate([('Canal Verde', VERDE), ('Canal Naranja', NARANJA), ('Canal Rojo', ROJO)]):
         lx = 2.20 + li * 2.0
@@ -445,7 +433,7 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
             align=PP_ALIGN.CENTER, valign='middle')
         txt(s8, lbl, bx, 1.96, 1.55, 0.25,  9, bold=True, color=GRAY,
             align=PP_ALIGN.CENTER)
-    txt(s8, 'Límite: 48 hs hábiles desde TAD Subido',
+    txt(s8, 'Límite: 2 días hábiles desde Último Evento',
         0.45, 2.48, 8.0, 0.25, 8.5, color=GRAY)
 
     txt(s8, 'APROBADOS · TIEMPO DE APROBACIÓN (informativo)',
@@ -456,7 +444,7 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
                    ('+15 días',    r15,   pct_r(r15),   ROJO)]
     bx2 = 2.40
     bw2 = 9.50
-    bh2 = 0.52  # altura aumentada para que no se corte texto
+    bh2 = 0.52
     for ri, (lbl, cnt, pct_seg, col) in enumerate(rangos_rows):
         ry2 = 3.27 + ri * 0.85
         txt(s8, lbl, 0.45, ry2, bx2-0.55, bh2, 9, color=DARK, valign='middle')
@@ -464,12 +452,10 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
         if cnt > 0:
             fw2 = max(0.3, bw2 * pct_seg / 100)
             rect(s8, bx2, ry2, fw2, bh2, col)
-            # Solo mostrar texto si la barra es suficientemente ancha
             if fw2 > 0.8:
                 txt(s8, f"{cnt} exp · {pct_seg}%", bx2+0.10, ry2, fw2-0.1, bh2,
                     9, bold=True, color=WHITE, valign='middle')
             else:
-                # texto afuera de la barra
                 txt(s8, f"{cnt} exp · {pct_seg}%", bx2+fw2+0.1, ry2, 2.0, bh2,
                     9, bold=True, color=col, valign='middle')
         else:
@@ -480,7 +466,6 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
 
     # ── SLIDE 9: CIERRE ─────────────────────────────────────────────────────
     s9 = prs.slides.add_slide(blank)
-    # Usar la imagen de cierre corporativa (fondo teal con logo INTERLOG)
     cierre_candidates = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bg_cierre.jpg'),
         '/home/claude/bg_cierre.jpg',
@@ -491,7 +476,6 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
         with open(cierre_bg, 'rb') as f:
             add_bg(s9, f.read())
     else:
-        # Fallback: fondo teal sólido
         teal_bg = RGBColor(0x1A, 0x8A, 0x7A)
         teal_dk = RGBColor(0x15, 0x75, 0x67)
         rect(s9, 0, 0, W_IN, H_IN, teal_bg)
@@ -536,11 +520,11 @@ if __name__ == '__main__':
                 for i in range(total)]
 
     def fake_ofi(nombre, via, total, out_count):
-        lim = 48 if nombre == 'FSM' and via == 'MARITIMO' else 24
+        lim = 2 if nombre == 'FSM' and via == 'MARITIMO' else 1
         return [{'razon': FASA if nombre == 'FASA' else FSM,
                  'nombre': nombre, 'ref': f'O{i}', 'carpeta': f'OC{i}', 'via': via,
                  'f_ofi': datetime(2025, 12, 1), 'f_ult': datetime(2025, 12, 2),
-                 'hs': lim+5 if i < out_count else lim-2, 'limite': lim,
+                 'hs': lim+2 if i < out_count else lim-1, 'limite': lim,
                  'desvio': i < out_count, 'desvio_desc': '',
                  'parametro': 'INTERLOG' if i < out_count else ''}
                 for i in range(total)]
@@ -564,9 +548,10 @@ if __name__ == '__main__':
            fake_ofi('FSM',  'MARITIMO',  5, 0))
 
     cm_pre = [{'carpeta': f'C{i}', 'exp': f'EXP{i:03}',
-               'f_tad': datetime(2025, 12, 1), 'f_ult': datetime(2025, 12, 3),
-               'hs': 50 if i < 0 else 30, 'desvio': False,
-               'desvio_desc': '', 'parametro': ''}
+               'f_tad': datetime(2025, 12, 4), 'f_ult': datetime(2025, 12, 1),
+               'hs': 3 if i < 1 else 1, 'desvio': i < 1,
+               'desvio_desc': 'Demora TAD' if i < 1 else '',
+               'parametro': 'INTERLOG' if i < 1 else ''}
               for i in range(15)]
 
     cm_apr = [{'carpeta': f'C{i}', 'exp': f'EXP{i:03}',
