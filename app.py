@@ -758,123 +758,113 @@ nav_steps = [
 current_step  = st.session_state.step
 max_step      = st.session_state.max_step
 
-nav_cols = st.columns([3, 3, 3, 3, 2])  # 4 steps + botón Nuevo análisis
+nav_cols = st.columns([3, 3, 3, 3, 2])
+
+# CSS inyectado una vez, apuntando a cada botón por su key
+# Streamlit renderiza el key como data-testid en el botón interno
+nav_css_parts = []
+for nav in nav_steps:
+    s          = nav["step"]
+    accessible = nav["always"] or max_step >= s
+    is_active  = current_step == s
+    is_done    = max_step >= s and not is_active
+
+    sel = f'button[data-testid="baseButton-secondary"][key="nav_{s}"], [data-testid="stBaseButton-secondary"][aria-label*="nav_{s}"]'
+
+    # Selector real que funciona en Streamlit: apuntar por el texto del botón no es confiable,
+    # pero sí podemos usar nth-of-type dentro del bloque de columnas.
+    # Usamos el ID del contenedor que Streamlit genera a partir del key.
+    # La forma más robusta: inyectar el CSS justo antes del botón con un selector +:
+    # En su lugar, generamos un <style> con un id único por step y lo vinculamos
+    # al div wrapper que sí podemos controlar.
+    pass
+
+# Generar CSS global con selectores de clase que envuelven cada botón
+st.markdown("""
+<style>
+/* Base compartido */
+.snav div[data-testid="stButton"] > button {
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px !important;
+    border-radius: 6px !important;
+    padding: 0.52rem 0.6rem !important;
+    transition: all 0.15s ease !important;
+    box-shadow: none !important;
+}
+.snav-active div[data-testid="stButton"] > button {
+    background: #00C9A7 !important;
+    color: #0A1628 !important;
+    border: 2px solid #00C9A7 !important;
+    cursor: default !important;
+}
+.snav-active div[data-testid="stButton"] > button:hover {
+    background: #00C9A7 !important; transform: none !important;
+}
+.snav-on div[data-testid="stButton"] > button {
+    background: #132236 !important;
+    color: #C8DDE8 !important;
+    border: 1px solid rgba(0,201,167,0.25) !important;
+}
+.snav-on div[data-testid="stButton"] > button:hover {
+    background: rgba(0,201,167,0.08) !important;
+    color: #E8F6F4 !important;
+    border-color: rgba(0,201,167,0.55) !important;
+    transform: none !important; box-shadow: none !important;
+}
+.snav-off div[data-testid="stButton"] > button {
+    background: #0C1B2A !important;
+    color: #253545 !important;
+    border: 1px dashed #1A2E3E !important;
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+.snav-off div[data-testid="stButton"] > button:hover {
+    background: #0C1B2A !important; transform: none !important;
+}
+.snav-new div[data-testid="stButton"] > button {
+    background: transparent !important;
+    color: #4A6070 !important;
+    border: 1px solid rgba(107,128,153,0.3) !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.3px !important;
+}
+.snav-new div[data-testid="stButton"] > button:hover {
+    border-color: rgba(255,61,94,0.5) !important;
+    color: #FF3D5E !important;
+    background: rgba(255,61,94,0.06) !important;
+    transform: none !important; box-shadow: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 for col, nav in zip(nav_cols[:4], nav_steps):
     s          = nav["step"]
     accessible = nav["always"] or max_step >= s
     is_active  = current_step == s
     is_done    = max_step >= s and not is_active
+    label      = nav["label"] + (" ●" if is_done else "")
 
-    # Paleta por estado
-    if is_active:
-        bg     = "#00C9A7"
-        tc     = "#0A1628"
-        border = "2px solid #00C9A7"
-    elif accessible:
-        bg     = "#132236"
-        tc     = "#C8DDE8"
-        border = "1px solid rgba(0,201,167,0.25)"
-    else:
-        bg     = "#0C1B2A"
-        tc     = "#2A4060"
-        border = "1px dashed #182A3A"
+    if is_active:   css = "snav snav-active"
+    elif accessible: css = "snav snav-on"
+    else:            css = "snav snav-off"
 
-    done_dot = (
-        '<span style="display:inline-block;width:5px;height:5px;border-radius:50%;'
-        'background:#00C9A7;margin-left:5px;vertical-align:middle;opacity:0.85;"></span>'
-    ) if is_done else ''
+    with col:
+        st.markdown(f'<div class="{css}">', unsafe_allow_html=True)
+        clicked = st.button(label, key=f"nav_{s}", use_container_width=True,
+                            disabled=(not accessible or is_active))
+        st.markdown('</div>', unsafe_allow_html=True)
+    if clicked:
+        go_to(s)
 
-    nav_id = f"navw{s}"
-
-    # Hover solo si accesible y no activo
-    hover_css = f"""
-    #{nav_id}:hover .nf {{
-        background: rgba(0,201,167,0.07) !important;
-        border-color: rgba(0,201,167,0.5) !important;
-        color: #E8F6F4 !important;
-    }}""" if (accessible and not is_active) else ""
-
-    # Div decorativo (pointer-events:none para que el botón debajo reciba los clicks)
-    col.markdown(f"""
-<style>
-#{nav_id} {{ position:relative; border-radius:6px; margin-top:0.8rem; }}
-{hover_css}
-</style>
-<div id="{nav_id}">
-  <div class="nf" style="
-      background:{bg}; color:{tc}; border:{border};
-      border-radius:6px; padding:0.52rem 0.5rem;
-      text-align:center; font-family:'Barlow Condensed',sans-serif;
-      font-size:0.9rem; font-weight:700; letter-spacing:0.5px;
-      user-select:none; transition:all 0.15s ease; pointer-events:none;">
-    {nav['label']}{done_dot}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-    # Botón transparente superpuesto — solo si clickeable
-    if accessible and not is_active:
-        col.markdown(f"""
-<style>
-#{nav_id}_b {{
-    position:relative;
-    margin-top:-2.28rem;
-    height:2.28rem;
-    z-index:5;
-}}
-#{nav_id}_b div[data-testid="stButton"] > button {{
-    position:absolute !important;
-    inset:0 !important;
-    width:100% !important;
-    height:100% !important;
-    background:transparent !important;
-    border:none !important;
-    box-shadow:none !important;
-    opacity:0 !important;
-    cursor:pointer !important;
-    border-radius:6px !important;
-}}
-#{nav_id}_b div[data-testid="stButton"] > button:hover,
-#{nav_id}_b div[data-testid="stButton"] > button:focus {{
-    background:transparent !important;
-    transform:none !important;
-    box-shadow:none !important;
-}}
-</style>
-<div id="{nav_id}_b">""", unsafe_allow_html=True)
-        if col.button("·", key=f"nav_{s}", help=nav["label"], use_container_width=True):
-            go_to(s)
-        col.markdown("</div>", unsafe_allow_html=True)
-
-# ── Botón Nuevo análisis — estilo sutil
 with nav_cols[4]:
-    nav_cols[4].markdown("""
-<style>
-#navnew { margin-top:0.8rem; }
-#navnew div[data-testid="stButton"] > button {
-    background: transparent !important;
-    border: 1px solid rgba(107,128,153,0.3) !important;
-    color: #4A6070 !important;
-    font-family: 'Barlow Condensed', sans-serif !important;
-    font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.3px !important;
-    padding: 0.52rem 0.5rem !important;
-    transition: all 0.15s ease !important;
-}
-#navnew div[data-testid="stButton"] > button:hover {
-    border-color: rgba(255,61,94,0.5) !important;
-    color: #FF3D5E !important;
-    background: rgba(255,61,94,0.06) !important;
-    transform: none !important;
-}
-</style>
-<div id="navnew">""", unsafe_allow_html=True)
-    if nav_cols[4].button("🔄 Nuevo análisis", key="btn_new", use_container_width=True,
-                          help="Reinicia todo desde cero"):
+    st.markdown('<div class="snav snav-new">', unsafe_allow_html=True)
+    if st.button("🔄 Nuevo análisis", key="btn_new", use_container_width=True):
         reset_all()
         st.rerun()
-    nav_cols[4].markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("<div style='margin-top:1.2rem;'></div>", unsafe_allow_html=True)
 
