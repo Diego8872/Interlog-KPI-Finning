@@ -169,6 +169,10 @@ def go_to(step):
 # HELPERS
 # ─────────────────────────────────────────────
 def parse_date(val):
+    if val is None: return None
+    try:
+        if pd.isnull(val): return None
+    except: pass
     if isinstance(val, datetime): return val
     if isinstance(val, str):
         for fmt in ['%d/%m/%Y %H:%M:%S', '%d/%m/%Y', '%Y-%m-%d']:
@@ -213,6 +217,7 @@ def procesar_liberadas(df):
     for _, r in df.iterrows():
         razon = r.get('Razon Social', '')
         via   = str(r.get('Via', '')).upper().strip()
+        via   = 'MARITIMO' if via == 'ACUATICO' else via
         canal = str(r.get('Canal', '')).upper().strip()
         f_ofi = parse_date(r.get('Fecha Oficialización'))
         f_can = parse_date(r.get('Fecha Cancelada'))
