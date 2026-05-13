@@ -105,7 +105,7 @@ def slide_header(slide, title):
     rect(slide, 0.45, 0.88, 3.0, 0.04, TEAL)
 
 
-def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
+def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite, items=None):
     color = kpi_color(pct)
     w_card = 2.80
 
@@ -140,6 +140,29 @@ def add_kpi_card(slide, x, total, inn, out, pct, title, subtitle, limite):
     rect(slide, kx+0.1, 4.05, fw, 0.28, color)
     txt(slide, 'TARGET 95%', kx, 4.38, kw, 0.28,
         16, bold=True, color=GRAY, align=PP_ALIGN.CENTER)
+
+    # ── Desglose por vía ──────────────────────────────────────────────────
+    if items:
+        via_labels = {'AVION': 'Aereo', 'CAMION': 'Camion', 'MARITIMO': 'Maritimo'}
+        vy = 4.75
+        txt(slide, 'POR VIA', kx, vy, kw, 0.20, 7.5, bold=True, color=GRAY,
+            align=PP_ALIGN.CENTER)
+        vy += 0.24
+        for via in ['AVION', 'CAMION', 'MARITIMO']:
+            sub = [i for i in items if i['via'] == via]
+            if not sub:
+                continue
+            pct_v, in_v, out_v = calcular_kpi(sub, True)
+            col_v = kpi_color(pct_v)
+            rect(slide, kx+0.10, vy, kw-0.20, 0.30, ROW_LIGHT)
+            txt(slide, via_labels[via],
+                kx+0.18, vy, kw*0.52, 0.30, 7.5, color=DARK, valign='middle')
+            txt(slide, fmt_pct(pct_v),
+                kx+0.18+kw*0.52, vy, kw*0.36, 0.30, 8,
+                bold=True, color=col_v, align=PP_ALIGN.RIGHT, valign='middle')
+            txt(slide, f"{len(sub)} ops",
+                kx+0.18, vy+0.30, kw*0.52, 0.18, 6.5, color=GRAY, valign='middle')
+            vy += 0.50
 
 
 def add_liberacion_slide(prs, bg_bytes, lib_items, nombre, blank_layout):
@@ -511,6 +534,149 @@ def add_desvios_slide(prs, bg_bytes, items, titulo, blank_layout, es_cm=False):
         tbl_x, nota_y, tbl_w + 0.50, 0.28, 8, color=GRAY, italic=True)
 
 
+
+def add_desvios_por_via_slide(prs, bg_bytes, items, titulo_slide, blank_layout, es_cm=False):
+    """
+    Slide de desvíos con desglose por vía.
+    Panel KPI derecho con total. Tabla izquierda con sección por cada vía presente.
+    """
+    s = prs.slides.add_slide(blank_layout)
+    add_bg(s, bg_bytes)
+    slide_header(s, titulo_slide)
+
+    vias_presentes = [v for v in ['AVION', 'CAMION', 'MARITIMO']
+                      if any(i['via'] == v for i in items)]
+
+    # ── Panel KPI derecho (totales generales) ────────────────────────────
+    KPI_PANEL_W = 3.30
+    kpi_x = _SLIDE_W - _MARGIN - KPI_PANEL_W
+    pct_tot, in_tot, out_tot = calcular_kpi(items, True)
+    col_tot = kpi_color(pct_tot)
+    unit = 'exp' if es_cm else 'ops'
+
+    panel_h = 2.60
+    rect(s, kpi_x, 1.05, KPI_PANEL_W, panel_h, BG_CARD)
+    rect(s, kpi_x, 1.05, 0.06, panel_h, col_tot)
+    txt(s, 'KPI IN TOTAL', kpi_x+0.12, 1.12, KPI_PANEL_W-0.18, 0.28,
+        9, bold=True, color=GRAY, align=PP_ALIGN.CENTER)
+    txt(s, fmt_pct(pct_tot), kpi_x+0.12, 1.38, KPI_PANEL_W-0.18, 1.20,
+        48, bold=True, color=col_tot, align=PP_ALIGN.CENTER, valign='middle')
+    txt(s, 'TARGET: 95%', kpi_x+0.12, 2.62, KPI_PANEL_W-0.18, 0.25,
+        9, bold=True, color=GRAY, align=PP_ALIGN.CENTER)
+    rect(s, kpi_x+0.18, 2.92, KPI_PANEL_W-0.36, 0.20, LGRAY)
+    bw_p = max(0.05, (KPI_PANEL_W-0.36) * pct_tot / 100)
+    rect(s, kpi_x+0.18, 2.92, bw_p, 0.20, col_tot)
+    txt(s, f"{in_tot} IN  ·  {out_tot} OUT",
+        kpi_x+0.12, 3.18, KPI_PANEL_W-0.18, 0.28,
+        9, color=GRAY, align=PP_ALIGN.CENTER)
+    txt(s, f"Total: {len(items)} {unit}",
+        kpi_x+0.12, 3.46, KPI_PANEL_W-0.18, 0.25,
+        9, color=GRAY, align=PP_ALIGN.CENTER)
+
+    # KPI por vía en el panel derecho
+    vy = 3.80
+    via_labels = {'AVION': 'Aereo', 'CAMION': 'Camion', 'MARITIMO': 'Maritimo'}
+    txt(s, 'POR VIA', kpi_x+0.12, vy, KPI_PANEL_W-0.18, 0.22,
+        7.5, bold=True, color=GRAY, align=PP_ALIGN.CENTER)
+    vy += 0.24
+    for via in vias_presentes:
+        sub_v = [i for i in items if i['via'] == via]
+        pct_v, in_v, out_v = calcular_kpi(sub_v, True)
+        col_v = kpi_color(pct_v)
+        rect(s, kpi_x+0.10, vy, KPI_PANEL_W-0.20, 0.30, ROW_LIGHT)
+        txt(s, via_labels[via],
+            kpi_x+0.18, vy, (KPI_PANEL_W-0.20)*0.52, 0.30,
+            7.5, color=DARK, valign='middle')
+        txt(s, fmt_pct(pct_v),
+            kpi_x+0.18+(KPI_PANEL_W-0.20)*0.52, vy, (KPI_PANEL_W-0.20)*0.36, 0.30,
+            8, bold=True, color=col_v, align=PP_ALIGN.RIGHT, valign='middle')
+        txt(s, f"{len(sub_v)} {unit}",
+            kpi_x+0.18, vy+0.30, (KPI_PANEL_W-0.20)*0.52, 0.18,
+            6.5, color=GRAY, valign='middle')
+        vy += 0.50
+
+    # ── Tabla izquierda con sección por vía ─────────────────────────────
+    tbl_x = _MARGIN
+    tbl_w = kpi_x - _MARGIN - 0.30
+
+    n_vias = len(vias_presentes)
+    # Estimar espacio disponible
+    available_h = _SLIDE_H - _HDR_TOP - 0.10 - _FOOTER_H
+    # Por cada vía: encabezado de vía (0.30) + header tabla (0.36) + filas
+    # Calculamos max_filas por vía para el layout
+    max_filas_via = max((len(_build_filas([i for i in items if i['via'] == v], es_cm)[0])
+                         for v in vias_presentes), default=3)
+    hdr_via_h = 0.30
+    hdr_tbl_h = 0.32
+    bar_blk   = 0.42
+    espacio_via = (available_h - n_vias * (hdr_via_h + hdr_tbl_h + bar_blk)) / max(1, n_vias)
+    row_h    = min(0.40, max(0.22, espacio_via / max(max_filas_via, 1)))
+    font_row = max(7.0, min(9.5, row_h * 21))
+
+    col_rango = tbl_w * 0.57
+    col_op    = tbl_w * 0.18
+    col_kpi_c = tbl_w * 0.25
+    font_hdr  = max(8.0, font_row)
+
+    cur_y = _HDR_TOP + 0.08
+    via_icon = {'AVION': 'Aereo', 'CAMION': 'Camion', 'MARITIMO': 'Maritimo'}
+
+    for via in vias_presentes:
+        sub_v = [i for i in items if i['via'] == via]
+        filas, pct_v, in_v, out_v, total_v, unit_v = _build_filas(sub_v, es_cm)
+        col_v = kpi_color(pct_v)
+
+        # Encabezado de vía
+        rect(s, tbl_x, cur_y, tbl_w, hdr_via_h, RGBColor(0xE0, 0xEE, 0xEC))
+        rect(s, tbl_x, cur_y, 0.05, hdr_via_h, col_v)
+        txt(s, f"{via_icon[via]}  {fmt_pct(pct_v)}  ·  {in_v} IN · {out_v} OUT · {total_v} {unit_v}",
+            tbl_x+0.12, cur_y, tbl_w-0.15, hdr_via_h,
+            9, bold=True, color=DARK, valign='middle')
+        cur_y += hdr_via_h
+
+        # Header tabla
+        rect(s, tbl_x,                      cur_y, col_rango, hdr_tbl_h, HDR_TEAL)
+        rect(s, tbl_x+col_rango,            cur_y, col_op,    hdr_tbl_h, HDR_TEAL)
+        rect(s, tbl_x+col_rango+col_op,     cur_y, col_kpi_c, hdr_tbl_h, HDR_TEAL)
+        txt(s, 'Rango', tbl_x+0.10, cur_y, col_rango-0.10, hdr_tbl_h,
+            font_hdr, bold=True, color=WHITE, valign='middle')
+        txt(s, 'OP', tbl_x+col_rango+0.04, cur_y, col_op-0.04, hdr_tbl_h,
+            font_hdr, bold=True, color=WHITE, align=PP_ALIGN.CENTER, valign='middle')
+        txt(s, 'KPI', tbl_x+col_rango+col_op+0.04, cur_y, col_kpi_c-0.04, hdr_tbl_h,
+            font_hdr, bold=True, color=WHITE, align=PP_ALIGN.CENTER, valign='middle')
+        cur_y += hdr_tbl_h
+
+        # Filas
+        for ri, (lbl, ops, kpi_str, col_val, is_bold) in enumerate(filas):
+            bg = ROW_DARK if ri % 2 == 0 else ROW_LIGHT
+            if lbl == 'Total general':
+                bg = RGBColor(0xD5, 0xE5, 0xE3)
+            rect(s, tbl_x,                   cur_y, col_rango, row_h, bg)
+            rect(s, tbl_x+col_rango,         cur_y, col_op,    row_h, bg)
+            rect(s, tbl_x+col_rango+col_op,  cur_y, col_kpi_c, row_h, bg)
+            if lbl in ['IN', 'Total general']:
+                rect(s, tbl_x, cur_y, 0.05, row_h, TEAL if lbl == 'IN' else HDR_TEAL)
+            c = DARK if lbl in ['S/DESVÍO', 'Total general'] else col_val
+            txt(s, lbl, tbl_x+0.10, cur_y, col_rango-0.10, row_h,
+                font_row, bold=is_bold, color=c, valign='middle')
+            txt(s, str(ops), tbl_x+col_rango+0.04, cur_y, col_op-0.04, row_h,
+                font_row, bold=is_bold, color=c, align=PP_ALIGN.CENTER, valign='middle')
+            txt(s, kpi_str, tbl_x+col_rango+col_op+0.04, cur_y, col_kpi_c-0.04, row_h,
+                font_row, bold=is_bold, color=c, align=PP_ALIGN.CENTER, valign='middle')
+            cur_y += row_h
+
+        # Barra de progreso por vía
+        rect(s, tbl_x, cur_y+0.06, tbl_w, 0.14, LGRAY)
+        bw2 = max(0.05, tbl_w * pct_v / 100)
+        rect(s, tbl_x, cur_y+0.06, bw2, 0.14, col_v)
+        cur_y += 0.32
+
+    # Nota al pie
+    nota_y = _SLIDE_H - _FOOTER_H + 0.05
+    txt(s, '* Parámetro ≠ INTERLOG → operación se considera IN  |  S/DESVÍO = dentro del rango',
+        _MARGIN, nota_y, _SLIDE_W - 2*_MARGIN, 0.28, 8, color=GRAY, italic=True)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
     """Genera el PowerPoint y retorna BytesIO."""
@@ -649,20 +815,89 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
     # 14. Portada Final
     # ══════════════════════════════════════════════════════════════════════
 
-    # ── SLIDE 3: OFICIALIZACIÓN · FASA + FSM ────────────────────────────────
+    # ── SLIDE 3: OFICIALIZACIÓN · FASA + FSM · POR VÍA (layout dinámico) ────
     s3 = prs.slides.add_slide(blank)
     add_bg(s3, bg_contenido)
-    slide_header(s3, 'OFICIALIZACIÓN · FASA + FSM')
-    add_kpi_card(s3, 0.45, ofi_fasa_tot, ofi_fasa_in, ofi_fasa_out, ofi_fasa_pct,
-                 'FASA', 'OFICIALIZACIÓN', '1 día hábil')
-    add_kpi_card(s3, 6.80, ofi_fsm_tot,  ofi_fsm_in,  ofi_fsm_out,  ofi_fsm_pct,
-                 'FSM',  'OFICIALIZACIÓN', '1 día hábil (2 días Marítimo)')
+    slide_header(s3, 'OFICIALIZACIÓN · FASA + FSM · POR VÍA')
+
+    _vias_ofi    = ['AVION', 'CAMION', 'MARITIMO']
+    _nombres_ofi = ['FASA', 'FSM']
+    _via_lbl_ofi = {'AVION': 'Via Aerea', 'CAMION': 'Via Camion', 'MARITIMO': 'Via Maritima'}
+    _franja_h    = 0.32
+    _gap_fila    = 0.14
+    _gap_x       = 0.18
+    _sx          = 0.42
+    _sy          = 1.02
+    _tw          = W_IN - 2 * _sx
+    _footer_y    = 6.55   # margen seguro antes del footer INTERLOG
+
+    _noms_con_ops = [nm for nm in _nombres_ofi
+                     if any(i['nombre'] == nm for i in ofi_items)]
+    _n_filas = len(_noms_con_ops)
+    _esp_cards = _footer_y - _sy - _n_filas * _franja_h - (_n_filas - 1) * _gap_fila
+    _card_h = max(1.40, min(_esp_cards / _n_filas, 2.40))
+
+    _cur_y = _sy
+    for _nom in _noms_con_ops:
+        _vias_ok = [v for v in _vias_ofi
+                    if any(i['via'] == v and i['nombre'] == _nom for i in ofi_items)]
+        _nv   = len(_vias_ok)
+        _cw   = (_tw - _gap_x * (_nv - 1)) / _nv
+        _sub_t = [i for i in ofi_items if i['nombre'] == _nom]
+        _pt, _it, _ot = calcular_kpi(_sub_t, True)
+
+        rect(s3, _sx, _cur_y, _tw, _franja_h, HDR_TEAL)
+        rect(s3, _sx, _cur_y, 0.06, _franja_h, TEAL)
+        txt(s3, f"{_nom}  ·  OFICIALIZACION",
+            _sx+0.14, _cur_y, _tw*0.55, _franja_h,
+            12, bold=True, color=WHITE, valign='middle')
+        txt(s3, f"KPI: {fmt_pct(_pt)}  ·  {_it} IN  ·  {_ot} OUT  ·  {len(_sub_t)} ops",
+            _sx+0.14, _cur_y, _tw-0.20, _franja_h,
+            8.5, color=RGBColor(0xC0,0xE8,0xE2), align=PP_ALIGN.RIGHT, valign='middle')
+
+        _cy = _cur_y + _franja_h
+        for _ci, _via in enumerate(_vias_ok):
+            _sub = [i for i in ofi_items if i['nombre'] == _nom and i['via'] == _via]
+            _cx  = _sx + _ci * (_cw + _gap_x)
+            _pc, _ic, _oc = calcular_kpi(_sub, True)
+            _cc  = kpi_color(_pc)
+            _lim = _sub[0]['limite']
+            _ls  = f"Limite: {_lim} dia{'s' if _lim>1 else ''} habil{'es' if _lim>1 else ''}"
+
+            rect(s3, _cx, _cy, _cw, _card_h, BG_CARD)
+            rect(s3, _cx, _cy, _cw, 0.05, _cc)
+            txt(s3, _via_lbl_ofi[_via], _cx+0.12, _cy+0.08, _cw-0.20, 0.22, 8.5, bold=True, color=DARK)
+            txt(s3, fmt_pct(_pc), _cx, _cy+0.26, _cw, _card_h*0.46,
+                40, bold=True, color=_cc, align=PP_ALIGN.CENTER, valign='middle')
+
+            _by = _cy + _card_h * 0.73
+            _bx = _cx + 0.18
+            _bw = _cw - 0.36
+            rect(s3, _bx, _by, _bw, 0.11, LGRAY)
+            rect(s3, _bx, _by, max(0.05, _bw * _pc / 100), 0.11, _cc)
+
+            _sty = _by + 0.16
+            for _i, (_v, _lb, _c) in enumerate([
+                (str(len(_sub)), 'TOTAL', DARK),
+                (str(_ic), 'IN', TEAL),
+                (str(_oc), 'OUT', ROJO if _oc > 0 else TEAL)
+            ]):
+                _sw = (_cw - 0.24) / 3
+                _stx = _cx + 0.12 + _i * _sw
+                txt(s3, _v,  _stx, _sty,      _sw, 0.24, 13, bold=True, color=_c, align=PP_ALIGN.CENTER)
+                txt(s3, _lb, _stx, _sty+0.24, _sw, 0.16,  7, color=GRAY,  align=PP_ALIGN.CENTER)
+
+            txt(s3, _ls, _cx, _cy+_card_h-0.19, _cw, 0.18, 7, color=GRAY, align=PP_ALIGN.CENTER)
+
+        _cur_y = _cy + _card_h + _gap_fila
 
     # ── SLIDE 4: DESVÍOS OFICIALIZACIÓN (FASA + FSM separados) ──────────────
     ofi_fasa = [i for i in ofi_items if i['nombre'] == 'FASA']
     ofi_fsm  = [i for i in ofi_items if i['nombre'] == 'FSM']
-    add_desvios_doble_slide(prs, bg_contenido, ofi_fasa, ofi_fsm,
-                            'DESVÍOS · OFICIALIZACIÓN FASA + FSM', blank)
+    add_desvios_por_via_slide(prs, bg_contenido, ofi_fasa,
+                              'DESVÍOS · OFICIALIZACIÓN FASA', blank)
+    add_desvios_por_via_slide(prs, bg_contenido, ofi_fsm,
+                              'DESVÍOS · OFICIALIZACIÓN FSM', blank)
 
     # ── SLIDE 5: FASA · LIBERACIÓN ──────────────────────────────────────────
     add_liberacion_slide(prs, bg_contenido, lib_items, 'FASA', blank)
@@ -677,8 +912,8 @@ def generar_ppt(lib_items, ofi_items, cm_pre_items, cm_apr_items, mes='MES'):
 
     # ── SLIDE 8: DESVÍOS LIBERADAS FSM ──────────────────────────────────────
     lib_fsm_items = [i for i in lib_items if i['nombre'] == 'FSM']
-    add_desvios_slide(prs, bg_contenido, lib_fsm_items,
-                      'DESVÍOS · LIBERACIÓN FSM', blank)
+    add_desvios_por_via_slide(prs, bg_contenido, lib_fsm_items,
+                              'DESVÍOS · LIBERACIÓN FSM', blank)
 
     # ── SLIDE 9: CANAL VERDE · VÍA AÉREA ────────────────────────────────────
     s9 = prs.slides.add_slide(blank)
