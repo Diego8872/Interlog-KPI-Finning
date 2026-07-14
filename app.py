@@ -226,7 +226,7 @@ def procesar_liberadas(df):
         desvio = dias is not None and dias > limite
         results.append({
             'razon': razon, 'nombre': 'FASA' if razon == FASA else 'FSM',
-            'ref': r.get('Referencia', ''), 'carpeta': r.get('Carpeta', ''),
+            'ref': str(r.get('Referencia', '')).strip(), 'carpeta': r.get('Carpeta', ''),
             'via': via, 'canal': canal, 'f_ofi': f_ofi, 'f_cancel': f_can,
             'hs': dias, 'limite': limite, 'desvio': desvio,
             'desvio_desc': '', 'parametro': ''
@@ -246,7 +246,7 @@ def procesar_oficializados(df):
         desvio = dias is not None and dias > limite
         results.append({
             'razon': razon, 'nombre': 'FASA' if razon == FASA else 'FSM',
-            'ref': r.get('Referencia', ''), 'carpeta': r.get('Carpeta', ''),
+            'ref': str(r.get('Referencia', '')).strip(), 'carpeta': r.get('Carpeta', ''),
             'via': via, 'f_ofi': f_ofi, 'f_ult': f_ult,
             'hs': dias, 'limite': limite, 'desvio': desvio,
             'desvio_desc': '', 'parametro': ''
