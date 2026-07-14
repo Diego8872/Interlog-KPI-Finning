@@ -1123,7 +1123,13 @@ elif st.session_state.step == 2:
                             st.session_state.max_step     = max(st.session_state.max_step, 3)
                             st.rerun()
                     else:
-                        st.markdown(f'<div class="alert-warn">⚠️ Faltan completar {total_pend} desvíos. Revisá el Excel y volvé a subirlo.</div>', unsafe_allow_html=True)
+                        detail = []
+                        for i in pendientes:
+                            if 'ref' in i:
+                                detail.append(f"Liberadas/Ofi: {repr(i['ref'])}")
+                            else:
+                                detail.append(f"CM: {repr(str(i.get('exp','')))}")
+                        st.markdown(f'<div class="alert-warn">⚠️ Faltan completar {total_pend} desvíos.<br>Pendiente: {" | ".join(detail)}</div>', unsafe_allow_html=True)
 
                 except Exception as e:
                     st.markdown(f'<div class="alert-warn">❌ Error al leer el Excel: {str(e)}</div>', unsafe_allow_html=True)
