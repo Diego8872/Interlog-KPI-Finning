@@ -241,7 +241,7 @@ def procesar_oficializados(df):
         via   = 'MARITIMO' if via == 'ACUATICO' else via
         f_ofi = parse_date(r.get('Fecha Oficialización'))
         f_ult = parse_date(r.get('Ultimo Evento'))
-        dias  = dias_habiles(f_ofi, f_ult)
+        dias  = dias_habiles(f_ult, f_ofi)
         limite = limite_ofi(razon, via)
         desvio = dias is not None and dias > limite
         results.append({
